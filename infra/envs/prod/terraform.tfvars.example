@@ -1,0 +1,14 @@
+project_id         = "replace-with-gcp-project-id"
+region             = "europe-west2"
+domain             = "awaydays.example.com"
+api_image          = "europe-west2-docker.pkg.dev/PROJECT/cpfc-away-days/api@sha256:REPLACE"
+worker_image       = "europe-west2-docker.pkg.dev/PROJECT/cpfc-away-days/worker@sha256:REPLACE"
+temporal_address   = "NAMESPACE.ACCOUNT.tmprl.cloud:7233"
+temporal_namespace = "NAMESPACE.ACCOUNT"
+resend_from_email  = "Crystal Palace Away Days <awaydays@example.com>"
+
+# Enable only after Temporal approves the namespace and supplies this identity.
+enable_temporal_serverless_workers = false
+temporal_serverless_impersonator_service_account_emails = [
+  # "service-account@temporal-controlled-project.iam.gserviceaccount.com",
+]

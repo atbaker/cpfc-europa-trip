@@ -1,0 +1,80 @@
+[
+  {
+    "id": "exa-context-v1",
+    "version": "2026-09-04",
+    "provider": "exa-context",
+    "enabled": true,
+    "acquisition_methods": ["api_mcp"],
+    "launch_modes": [
+      "public_self_serve",
+      "invite_only_concierge",
+      "editorial_social",
+      "internal_r_and_d"
+    ],
+    "display_fields": ["bounded_summary", "source_url", "source_checked_at"],
+    "workflow_history_fields": ["bounded_summary", "source_url", "source_checked_at"],
+    "cache_fields": [],
+    "email_fields": ["bounded_summary", "source_url"],
+    "trace_fields": ["provider", "latency_ms", "result_count"],
+    "quote_ttl": null,
+    "booking_link_policies": ["generic_search"],
+    "browser": null,
+    "recording_permitted": false,
+    "authorization_reference": "Exa is contextual research only; it is not live fare authority.",
+    "owner": "product-engineering",
+    "review_expires_at": "2027-03-01T00:00:00Z"
+  },
+  {
+    "id": "generic-travel-search-v1",
+    "version": "2026-09-04",
+    "provider": "generic-travel-search",
+    "enabled": true,
+    "acquisition_methods": ["generic_link"],
+    "launch_modes": [
+      "public_self_serve",
+      "invite_only_concierge",
+      "editorial_social",
+      "internal_r_and_d"
+    ],
+    "display_fields": ["provider", "generic_search_url", "label"],
+    "workflow_history_fields": ["provider", "generic_search_url", "label"],
+    "cache_fields": [],
+    "email_fields": ["provider", "generic_search_url", "label"],
+    "trace_fields": ["provider"],
+    "quote_ttl": null,
+    "booking_link_policies": ["generic_search"],
+    "browser": null,
+    "recording_permitted": false,
+    "authorization_reference": "Public provider home/search links; no fare or availability is copied.",
+    "owner": "product-engineering",
+    "review_expires_at": "2027-03-01T00:00:00Z"
+  },
+  {
+    "id": "browser-evaluation-v1",
+    "version": "2026-09-04",
+    "provider": "browser-evaluation",
+    "enabled": false,
+    "acquisition_methods": ["authorized_browser"],
+    "launch_modes": ["internal_r_and_d"],
+    "display_fields": [],
+    "workflow_history_fields": [],
+    "cache_fields": [],
+    "email_fields": [],
+    "trace_fields": ["provider", "latency_ms", "outcome"],
+    "quote_ttl": null,
+    "booking_link_policies": [],
+    "browser": {
+      "allowed_hosts": ["example.com"],
+      "allowed_path_prefixes": ["/owned-test-fixtures/"],
+      "allowed_actions": ["search", "read"],
+      "max_concurrency": 1,
+      "max_requests_per_minute": 5,
+      "stop_on_access_challenge": true,
+      "captcha_solving_enabled": false
+    },
+    "recording_permitted": false,
+    "authorization_reference": "Disabled placeholder. Replace with written authorization before enabling.",
+    "owner": "product-engineering",
+    "review_expires_at": "2027-03-01T00:00:00Z"
+  }
+]

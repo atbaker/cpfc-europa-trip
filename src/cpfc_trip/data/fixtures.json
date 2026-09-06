@@ -1,0 +1,86 @@
+[
+  {
+    "id": "uel-2026-lyon-away",
+    "competition_season_id": "uefa-europa-league-2026-27",
+    "home_team_id": "olympique-lyonnais",
+    "away_team_id": "crystal-palace",
+    "home_team_name": "Lyon",
+    "away_team_name": "Crystal Palace",
+    "kickoff_at": "2026-10-15T16:45:00Z",
+    "venue": {
+      "id": "lyon-venue-tbc",
+      "name": "Lyon venue (to be confirmed)",
+      "city": {"id": "lyon", "name": "Lyon", "country_code": "FR", "latitude": 45.7640, "longitude": 4.8357, "timezone": "Europe/Paris"},
+      "latitude": 45.7640,
+      "longitude": 4.8357,
+      "status": "provisional"
+    },
+    "status": "provisional",
+    "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+    "source_checked_at": "2026-09-03T00:00:00Z",
+    "catalog_version": "2026-09-03.1"
+  },
+  {
+    "id": "uel-2026-besiktas-away",
+    "competition_season_id": "uefa-europa-league-2026-27",
+    "home_team_id": "besiktas",
+    "away_team_id": "crystal-palace",
+    "home_team_name": "Beşiktaş",
+    "away_team_name": "Crystal Palace",
+    "kickoff_at": "2026-10-22T19:00:00Z",
+    "venue": {
+      "id": "besiktas-venue-tbc",
+      "name": "Istanbul venue (to be confirmed)",
+      "city": {"id": "istanbul", "name": "Istanbul", "country_code": "TR", "latitude": 41.0082, "longitude": 28.9784, "timezone": "Europe/Istanbul"},
+      "latitude": 41.0082,
+      "longitude": 28.9784,
+      "status": "provisional"
+    },
+    "status": "provisional",
+    "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+    "source_checked_at": "2026-09-03T00:00:00Z",
+    "catalog_version": "2026-09-03.1"
+  },
+  {
+    "id": "uel-2026-jagiellonia-away",
+    "competition_season_id": "uefa-europa-league-2026-27",
+    "home_team_id": "jagiellonia-bialystok",
+    "away_team_id": "crystal-palace",
+    "home_team_name": "Jagiellonia Białystok",
+    "away_team_name": "Crystal Palace",
+    "kickoff_at": "2026-12-10T17:45:00Z",
+    "venue": {
+      "id": "bialystok-venue-tbc",
+      "name": "Białystok venue (to be confirmed)",
+      "city": {"id": "bialystok", "name": "Białystok", "country_code": "PL", "latitude": 53.1325, "longitude": 23.1688, "timezone": "Europe/Warsaw"},
+      "latitude": 53.1325,
+      "longitude": 23.1688,
+      "status": "provisional"
+    },
+    "status": "provisional",
+    "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+    "source_checked_at": "2026-09-03T00:00:00Z",
+    "catalog_version": "2026-09-03.1"
+  },
+  {
+    "id": "uel-2026-salzburg-away",
+    "competition_season_id": "uefa-europa-league-2026-27",
+    "home_team_id": "red-bull-salzburg",
+    "away_team_id": "crystal-palace",
+    "home_team_name": "Salzburg",
+    "away_team_name": "Crystal Palace",
+    "kickoff_at": "2027-01-28T20:00:00Z",
+    "venue": {
+      "id": "salzburg-venue-tbc",
+      "name": "Salzburg venue (to be confirmed)",
+      "city": {"id": "salzburg", "name": "Salzburg", "country_code": "AT", "latitude": 47.8095, "longitude": 13.0550, "timezone": "Europe/Vienna"},
+      "latitude": 47.8095,
+      "longitude": 13.0550,
+      "status": "provisional"
+    },
+    "status": "provisional",
+    "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+    "source_checked_at": "2026-09-03T00:00:00Z",
+    "catalog_version": "2026-09-03.1"
+  }
+]
