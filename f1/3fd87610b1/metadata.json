@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "f13fd87610b1",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".node-version",
+    ".python-version",
+    "compose.yaml",
+    "frontend/package.json",
+    "frontend/tsconfig.json",
+    "frontend/vitest.config.ts",
+    "pyproject.toml",
+    "scripts/check-credentials.py",
+    "scripts/configure-local.py",
+    "scripts/dev/preview.sh",
+    "scripts/dev/setup.sh",
+    "tests/test_local_setup.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f1/3fd87610b1/0/metadata.json",
+      "transcript": "/f1/3fd87610b1/0/full.jsonl",
+      "compact_transcript": "/f1/3fd87610b1/0/transcript.jsonl",
+      "content_hash": "/f1/3fd87610b1/0/content_hash.txt",
+      "prompt": "/f1/3fd87610b1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1943199,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 45379584,
+    "output_tokens": 160270,
+    "api_call_count": 677
+  }
+}
