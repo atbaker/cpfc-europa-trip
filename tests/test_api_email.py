@@ -1,0 +1,146 @@
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from temporalio.exceptions import ApplicationError
+from temporalio.testing import ActivityEnvironment
+
+from cpfc_trip.api import create_app
+from cpfc_trip.domain import CreateSession, Itinerary, Snapshot
+from cpfc_trip.emailing import render
+from cpfc_trip.persistence.models import DeliveryRow, SessionRow
+from cpfc_trip.planner.agent import Intent
+from cpfc_trip.planner.planning import choose, enumerate_specs
+from cpfc_trip.planner.recorded import sample
+from cpfc_trip.temporal.activities import DeliveryActivities
+
+
+def frozen(data):
+    spec = enumerate_specs(data.brief, data.fixtures, data.routes, True)[0]
+    trip = choose(
+        data.fixtures[0],
+        [sample(spec, "flight"), sample(spec, "stay")],
+        data.brief,
+        data.routes,
+        Intent(action="revise", answer=""),
+    )
+    return Snapshot(
+        public_session_id=data.public_session_id,
+        email_deadline=datetime.now(UTC),
+        interaction_deadline=datetime.now(UTC),
+        phase="finalizing",
+        email_status="pending",
+        itinerary=Itinerary(revision=1, generated_at=datetime.now(UTC), trips=(trip,)),
+    )
+
+
+async def test_submission_and_email_idempotency(repository, session_input, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    request = CreateSession(
+        submission_id=uuid4(), email="supporter@example.com", brief=session_input.brief
+    )
+    data = await repository.create(request, "x" * 64)
+    again = await repository.create(request, "x" * 64)
+    assert data == again
+    with pytest.raises(PermissionError):
+        await repository.create(request, "y" * 64)
+    assert await repository.authorize(data.public_session_id, "x" * 64)
+    assert not await repository.authorize(data.public_session_id, "y" * 64)
+    async with repository.sessions() as db:
+        row = await db.get(SessionRow, str(data.public_session_id))
+        assert b"supporter@example.com" not in row.encrypted_email
+        assert "supporter@example.com" not in str(row.workflow_input)
+    snapshot = frozen(data)
+    deliver = DeliveryActivities(repository).deliver_itinerary
+    env = ActivityEnvironment()
+    first = await env.run(deliver, snapshot)
+    assert await env.run(deliver, snapshot) == first
+    async with repository.sessions() as db:
+        rows = (await db.scalars(select(DeliveryRow))).all()
+        assert len(rows) == 1 and rows[0].attempts == 1
+    changed = snapshot.model_copy(
+        update={
+            "itinerary": snapshot.itinerary.model_copy(
+                update={"caveats": ("Different frozen content",)}
+            )
+        }
+    )
+    with pytest.raises(ApplicationError, match="mismatch"):
+        await env.run(deliver, changed)
+
+
+async def test_ambiguous_email_expires_without_resend(repository, session_input):
+    request = CreateSession(
+        submission_id=uuid4(), email="supporter@example.com", brief=session_input.brief
+    )
+    data = await repository.create(request, "x" * 64)
+    snapshot = frozen(data)
+    import json
+
+    from cpfc_trip.persistence.repository import digest
+
+    payload = render(snapshot)
+    async with repository.sessions() as db, db.begin():
+        db.add(
+            DeliveryRow(
+                session_id=str(data.public_session_id),
+                payload_hash=digest(json.dumps(payload, sort_keys=True)),
+                payload=payload,
+                created_at=datetime.now(UTC) - timedelta(hours=24),
+                status="pending",
+                attempts=1,
+            )
+        )
+    with pytest.raises(ApplicationError, match="reconciliation"):
+        await ActivityEnvironment().run(DeliveryActivities(repository).deliver_itinerary, snapshot)
+
+
+def test_email_escapes_and_has_no_script_links(session_input):
+    snapshot = frozen(session_input)
+    trip = snapshot.itinerary.trips[0].model_copy(
+        update={"summary": '<script>alert("bad")</script>'}
+    )
+    snapshot = snapshot.model_copy(
+        update={"itinerary": snapshot.itinerary.model_copy(update={"trips": (trip,)})}
+    )
+    payload = render(snapshot)
+    assert "<script>" not in payload["html"] and "&lt;script&gt;" in payload["html"]
+    assert "Prices may have changed" in payload["text"]
+
+
+def test_api_auth_polling_204_and_csrf(settings, session_input):
+    repository = AsyncMock()
+    repository.authorize.return_value = False
+    temporal = AsyncMock()
+    from unittest.mock import Mock
+
+    handle = Mock()
+    handle.query = AsyncMock(return_value=None)
+    temporal.get_workflow_handle = Mock(return_value=handle)
+    app = create_app(settings, repository, temporal)
+    sid = session_input.public_session_id
+    with TestClient(app) as client:
+        assert client.get(f"/api/sessions/{sid}/snapshot").status_code == 404
+        assert not handle.query.called
+        repository.authorize.return_value = True
+        client.cookies.set(f"cpfc_{sid}", "x" * 64)
+        response = client.get(f"/api/sessions/{sid}/snapshot?after_revision=3")
+        assert response.status_code == 204 and response.headers["cache-control"] == "no-store"
+        assert (
+            client.post(
+                f"/api/sessions/{sid}/finalize",
+                json={"id": str(uuid4())},
+                headers={"Origin": "https://evil.example"},
+            ).status_code
+            == 403
+        )
+        handle.query.assert_awaited_once()
+        from temporalio.client import WorkflowQueryFailedError
+
+        handle.query.side_effect = WorkflowQueryFailedError("sensitive upstream diagnostics")
+        response = client.get(f"/api/sessions/{sid}/snapshot")
+        assert response.status_code == 503
+        assert "sensitive" not in response.text

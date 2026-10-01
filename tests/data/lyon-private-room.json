@@ -1,0 +1,53 @@
+{
+  "search": {
+    "search_parameters": {
+      "check_in_date": "2026-10-14",
+      "check_out_date": "2026-10-16",
+      "adults": 1,
+      "rooms": 1
+    },
+    "properties": [
+      {
+        "property_id": "12425376",
+        "title": "STUDIO ind\u00e9pendant, proche h\u00f4pitaux Est",
+        "link": "https://www.booking.com/hotel/fr/appartement-independant-proche-hopitaux-est.en-gb.html",
+        "city": "Lyon",
+        "rating": 8.8,
+        "extracted_price": 100,
+        "currency": "GBP",
+        "extracted_taxes_and_charges": 17,
+        "stay_summary": "2 nights, 1 adult",
+        "room_type": "Double Room with Private Bathroom"
+      }
+    ]
+  },
+  "details": {
+    "search_parameters": {
+      "check_in_date": "2026-10-14",
+      "check_out_date": "2026-10-16",
+      "adults": 1,
+      "rooms": 1
+    },
+    "rooms": [
+      {
+        "position": 1,
+        "name": "Double Room with Private Bathroom",
+        "price": "\u00a3101",
+        "extracted_price": 101,
+        "currency": "GBP",
+        "room_size": 30,
+        "room_size_unit": "m\u00b2",
+        "max_guests": 2,
+        "bathrooms": 1,
+        "bed_options": [
+          [
+            {
+              "type": "double_bed",
+              "count": 1
+            }
+          ]
+        ]
+      }
+    ]
+  }
+}

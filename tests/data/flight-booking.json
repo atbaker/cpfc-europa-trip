@@ -1,0 +1,114 @@
+{
+  "search_metadata": {
+    "created_at": "2026-09-06T17:40:32Z",
+    "request_url": "https://www.google.com/travel/flights/search?tfs=CBwQAhpbEgoyMDI2LTEwLTA0IiAKA0xHVxIKMjAyNi0xMC0wNBoDTFlTKgJVMjIEODQyOWoHCAESA0xIUmoHCAESA0xHV2oHCAESA1NUTmoHCAESA0xUTnIHCAESA0xZUxpbEgoyMDI2LTEwLTA2IiAKA0xZUxIKMjAyNi0xMC0wNhoDTEdXKgJVMjIEODQzMGoHCAESA0xZU3IHCAESA0xIUnIHCAESA0xHV3IHCAESA1NUTnIHCAESA0xUTkABQAFIAXABggELCP___________wGYAQE&tfu=CmxDalJJYkdzeWJrMXlRemw1VFhOQlUwOXlla0ZDUnkwdExTMHRMUzB0TFhkbVkza3pNVUZCUVVGQlIzRmtjRms0UzFWT2NWbEJFZ1pWTWpnME16QWFDZ2o0Y2hBQ0dnTkhRbEE0SFhDWm5BRT0SAggAIgMSATA&hl=en&gl=uk&curr=GBP"
+  },
+  "search_parameters": {
+    "engine": "google_flights",
+    "departure_id": "LHR,LGW,STN,LTN",
+    "arrival_id": "LYS",
+    "currency": "GBP",
+    "hl": "en",
+    "gl": "uk",
+    "outbound_date": "2026-10-04",
+    "return_date": "2026-10-06",
+    "flight_type": "round_trip",
+    "travel_class": "economy",
+    "stops": "any",
+    "adults": "2",
+    "children": "0",
+    "infants_in_seat": "0",
+    "infants_on_lap": "0"
+  },
+  "selected_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {
+            "name": "London Gatwick Airport",
+            "id": "LGW",
+            "date": "2026-10-04",
+            "time": "08:15"
+          },
+          "arrival_airport": {
+            "name": "Lyon Airport",
+            "id": "LYS",
+            "date": "2026-10-04",
+            "time": "10:55"
+          },
+          "duration": 100,
+          "airplane": "Airbus A319",
+          "airline": "easyJet",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/U2.png",
+          "travel_class": "Economy",
+          "flight_number": "U2 8429",
+          "extensions": [
+            "Carbon emission: 165 kg"
+          ],
+          "detected_extensions": {
+            "carbon_emission": 165
+          }
+        }
+      ],
+      "total_duration": 100,
+      "carbon_emissions": {
+        "this_flight": 166000,
+        "typical_for_this_route": 163000,
+        "difference_percent": 2
+      },
+      "type": "Round trip",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/U2.png"
+    },
+    {
+      "flights": [
+        {
+          "departure_airport": {
+            "name": "Lyon Airport",
+            "id": "LYS",
+            "date": "2026-10-06",
+            "time": "06:55"
+          },
+          "arrival_airport": {
+            "name": "London Gatwick Airport",
+            "id": "LGW",
+            "date": "2026-10-06",
+            "time": "07:35"
+          },
+          "duration": 100,
+          "airplane": "Airbus A320",
+          "airline": "easyJet",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/U2.png",
+          "travel_class": "Economy",
+          "flight_number": "U2 8430",
+          "extensions": [
+            "Carbon emission: 150 kg"
+          ],
+          "detected_extensions": {
+            "carbon_emission": 150
+          }
+        }
+      ],
+      "total_duration": 100,
+      "carbon_emissions": {
+        "this_flight": 150000,
+        "typical_for_this_route": 157000,
+        "difference_percent": -4
+      },
+      "type": "Round trip",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/U2.png"
+    }
+  ],
+  "booking_options": [
+    {
+      "book_with": "easyJet",
+      "flight_numbers": [
+        "U2 8429",
+        "U2 8430"
+      ],
+      "price": 148,
+      "baggage_prices": [
+        "1st checked bag available for a fee"
+      ]
+    }
+  ]
+}

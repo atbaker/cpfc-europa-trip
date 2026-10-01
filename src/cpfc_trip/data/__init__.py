@@ -1,1 +1,0 @@
-"""Versioned application seed data."""

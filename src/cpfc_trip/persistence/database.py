@@ -1,24 +1,7 @@
-"""Async SQLAlchemy engine construction."""
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from __future__ import annotations
-
-from functools import lru_cache
-
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-
-from cpfc_trip.config import get_settings
+from cpfc_trip.config import Settings
 
 
-@lru_cache
-def engine() -> AsyncEngine:
-    return create_async_engine(get_settings().database_url, pool_pre_ping=True, pool_size=5)
-
-
-@lru_cache
-def session_factory() -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(engine(), expire_on_commit=False)
+def engine(settings: Settings) -> AsyncEngine:
+    return create_async_engine(settings.database_url, pool_pre_ping=True)

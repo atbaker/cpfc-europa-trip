@@ -1,324 +1,314 @@
-"""Durable, club-neutral application contracts."""
+"""Versioned, bounded public records. Provider payloads never enter these models."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from enum import StrEnum
-from typing import Annotated, Literal
+from datetime import date
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
-class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+class Record(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class BudgetTier(StrEnum):
-    BUDGET = "budget"
-    VALUE = "value"
-    COMFORT = "comfort"
-
-
-class SessionPhase(StrEnum):
-    CREATED = "created"
-    RESEARCHING = "researching"
-    DRAFT_READY = "draft_ready"
-    REVISING = "revising"
-    FINALIZING = "finalizing"
-    EMAILED = "emailed"
-    FAILED = "failed"
-    EMAIL_FAILED = "email_failed"
-
-
-class Place(FrozenModel):
-    id: str
-    name: str
-    country_code: str
-    latitude: float
-    longitude: float
-    timezone: str
-
-
-class Venue(FrozenModel):
-    id: str
-    name: str
-    city: Place
-    latitude: float
-    longitude: float
-    status: Literal["provisional", "confirmed"]
-
-
-class FixtureSnapshot(FrozenModel):
-    id: str
-    competition_season_id: str
-    home_team_id: str
-    away_team_id: str
-    home_team_name: str
-    away_team_name: str
-    kickoff_at: datetime
-    venue: Venue
-    status: Literal["provisional", "confirmed", "rescheduled", "cancelled"]
-    source_url: HttpUrl
-    source_checked_at: datetime
-    catalog_version: str
-
-    @field_validator("kickoff_at", "source_checked_at")
-    @classmethod
-    def require_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("datetime must be timezone-aware")
-        return value
-
-
-class TravellerParty(FrozenModel):
-    adults: int = Field(default=1, ge=1, le=8)
-    child_ages: tuple[int, ...] = ()
-    rooms: int = Field(default=1, ge=1, le=4)
-
-    @field_validator("child_ages")
-    @classmethod
-    def validate_child_ages(cls, ages: tuple[int, ...]) -> tuple[int, ...]:
-        if len(ages) > 6 or any(age < 0 or age > 17 for age in ages):
-            raise ValueError("child ages must be between 0 and 17")
-        return ages
+class Party(Record):
+    adults: int = Field(1, ge=1, le=8)
+    child_ages: tuple[Annotated[int, Field(ge=0, le=17)], ...] = Field((), max_length=6)
+    rooms: int = Field(1, ge=1, le=4)
 
     @property
     def size(self) -> int:
         return self.adults + len(self.child_ages)
 
 
-class PlanningRequest(FrozenModel):
-    team_id: str = "crystal-palace"
-    fixture_ids: tuple[str, ...]
-    origin: str = Field(default="London", min_length=2, max_length=100)
-    travellers: TravellerParty = TravellerParty()
-    flexibility_days: int = Field(default=1, ge=0, le=3)
-    budget_tier: BudgetTier = BudgetTier.VALUE
-    extra_instructions: str | None = Field(default=None, max_length=2_000)
-    locale: str = "en-GB"
-    currency: Literal["GBP"] = "GBP"
-    contact_id: UUID
-    request_id: UUID
+class Window(Record):
+    fixture_id: str
+    earliest_departure: AwareDatetime
+    latest_return: AwareDatetime
 
-    @field_validator("fixture_ids")
-    @classmethod
-    def require_fixtures(cls, fixture_ids: tuple[str, ...]) -> tuple[str, ...]:
-        if not fixture_ids:
-            raise ValueError("select at least one fixture")
-        if len(set(fixture_ids)) != len(fixture_ids):
-            raise ValueError("fixture IDs must be unique")
-        if len(fixture_ids) > 4:
-            raise ValueError("select no more than four fixtures")
-        return fixture_ids
+    @model_validator(mode="after")
+    def ordered(self) -> Self:
+        if self.latest_return <= self.earliest_departure:
+            raise ValueError("Return must be after departure")
+        if (self.latest_return - self.earliest_departure).days > 7:
+            raise ValueError("Travel windows are limited to seven days")
+        return self
 
 
-class SessionCreateBody(FrozenModel):
-    request_id: UUID
+class Brief(Record):
+    fixture_ids: tuple[str, ...] = Field(min_length=1, max_length=4)
+    travellers: Party = Party()
+    budget_tier: Literal["budget", "value", "comfort"] = "value"
+    flexibility: Literal["tight", "day_either_side", "two_days"] = "day_either_side"
+    windows: tuple[Window, ...] = Field((), max_length=4)
+    extra_instructions: str = Field("", max_length=2000)
+    private_room: bool = False
+    private_bathroom: bool = False
+    transport_mode: Literal["flight", "rail"] | None = None
+
+    @model_validator(mode="after")
+    def unique(self) -> Self:
+        if len(set(self.fixture_ids)) != len(self.fixture_ids):
+            raise ValueError("Choose each fixture once")
+        ids = [w.fixture_id for w in self.windows]
+        if len(set(ids)) != len(ids) or not set(ids) <= set(self.fixture_ids):
+            raise ValueError("Travel windows must refer to distinct selected fixtures")
+        return self
+
+
+class CreateSession(Record):
+    submission_id: UUID
     email: EmailStr
-    fixture_ids: tuple[str, ...]
-    origin: str = Field(default="London", min_length=2, max_length=100)
-    adults: int = Field(default=1, ge=1, le=8)
-    child_ages: tuple[int, ...] = ()
-    rooms: int = Field(default=1, ge=1, le=4)
-    flexibility_days: int = Field(default=1, ge=0, le=3)
-    budget_tier: BudgetTier = BudgetTier.VALUE
-    extra_instructions: str | None = Field(default=None, max_length=2_000)
+    brief: Brief
 
 
-class Money(FrozenModel):
-    minor_units: int = Field(ge=0)
-    currency: Literal["GBP"] = "GBP"
-
-
-class BookingReference(FrozenModel):
-    provider: str
-    url: HttpUrl
-    label: str = "Check current price"
-    policy: Literal["direct_web", "refresh_in_app", "generic_search"] = "generic_search"
-
-
-class TransportLeg(FrozenModel):
-    kind: Literal["transport"] = "transport"
+class Fixture(Record):
     id: str
-    mode: Literal["flight", "rail", "coach", "ferry", "local_transit", "taxi", "walk"]
-    origin_name: str
-    destination_name: str
-    origin_timezone: str
+    opponent: str
+    city: str
+    timezone: str
+    kickoff_at: AwareDatetime
+    venue: str
+    venue_status: Literal["provisional", "confirmed"] = "provisional"
+    source_url: str
+    source_checked_at: AwareDatetime
+    catalog_version: str
+
+
+class TransferGuidance(Record):
+    title: str
+    description: str
+    source_url: str
+    reviewed_at: AwareDatetime
+
+
+class Route(Record):
+    id: str
+    fixture_id: str
+    mode: Literal["flight", "rail"]
+    origin: str
+    destination: str
     destination_timezone: str
-    departs_at: datetime
-    arrives_at: datetime
-    operator: str | None = None
-    service_number: str | None = None
-    price: Money | None = None
-    price_confidence: Literal["live", "recent", "estimated", "unavailable"] = "unavailable"
-    checked_at: datetime | None = None
-    booking: BookingReference | None = None
-    self_transfer: bool = False
+    enabled: bool = False
+    onward_stations: tuple[str, ...] = ()
+    minimum_transfer_minutes: int = Field(180, ge=0)
+    transfer_note: str
+    source_urls: tuple[str, ...] = ()
+    reviewed_at: AwareDatetime | None = None
+    guidance: tuple[TransferGuidance, ...] = Field((), max_length=5)
+    # Conservative supported local-clock windows, not claimed train timetables.
+    gateway_arrival_hours: tuple[int, int] = (0, 24)
+    gateway_departure_hours: tuple[int, int] = (0, 24)
+
+
+class Limits(Record):
+    initial_seconds: int = Field(180, ge=1, le=180)
+    follow_up_seconds: int = Field(90, ge=1, le=90)
+    inactivity_seconds: int = Field(600, ge=1, le=600)
+    interaction_seconds: int = Field(1800, ge=1, le=1800)
+    follow_ups: int = Field(10, ge=1, le=10)
+    search_initial: int = Field(64, ge=1, le=64)
+    search_follow_up: int = Field(16, ge=1, le=16)
+    search_session: int = Field(128, ge=1, le=128)
+    model_session: int = Field(32, ge=1, le=32)
+
+
+class SessionInput(Record):
+    public_session_id: UUID
+    contact_id: UUID
+    brief: Brief
+    fixtures: tuple[Fixture, ...]
+    routes: tuple[Route, ...]
+    limits: Limits = Limits()
+    planner_mode: Literal["live", "recorded"] = "live"
+    catalog_version: str = "2026-09-06.1"
+
+
+class Money(Record):
+    minor_units: int = Field(ge=0)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+
+
+class Evidence(Record):
+    provider: str = "SearchApi"
+    underlying_source: str
+    source_url: str | None = None
+    retrieved_at: AwareDatetime
+
+
+class Offer(Record):
+    id: str
+    booking_url: str | None = None
+    link_kind: Literal["direct", "contextual_search", "generic_search"] = "contextual_search"
+    seller: str | None = None
+    evidence: Evidence
+    search_fingerprint: str
+
+
+class Quote(Record):
+    id: str
+    amount: Money
+    scope: Literal["round_trip", "leg", "stay", "night", "unknown"]
+    unit: Literal["party", "person", "room", "bed", "unknown"]
+    priced_party: Party | None = None
+    taxes: Literal["included", "excluded", "unknown"] = "unknown"
+    additional_taxes: Money | None = None
+    payment_currency: str | None = None
+    observed_at: AwareDatetime
     caveats: tuple[str, ...] = ()
 
 
-class Stay(FrozenModel):
+class Leg(Record):
+    kind: Literal["transport"] = "transport"
+    id: str
+    mode: Literal["flight", "rail"]
+    origin: str
+    destination: str
+    departs_at: AwareDatetime
+    arrives_at: AwareDatetime
+    operator: str
+    service_number: str = ""
+    offer: Offer
+    quote: Quote | None = None
+    caveats: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def chronological(self) -> Self:
+        if self.arrives_at <= self.departs_at:
+            raise ValueError("Leg arrival must follow departure")
+        return self
+
+
+class Stay(Record):
     kind: Literal["stay"] = "stay"
     id: str
     property_name: str
-    place_name: str
     check_in: date
     check_out: date
-    room_description: str | None = None
-    price: Money | None = None
-    price_confidence: Literal["live", "recent", "estimated", "unavailable"] = "unavailable"
-    checked_at: datetime | None = None
-    booking: BookingReference | None = None
-    venue_transfer_note: str
+    room_description: str
+    bathroom: Literal["private", "shared", "unknown"] = "unknown"
+    room_type: Literal["private", "dorm", "unknown"] = "unknown"
+    max_guests: int | None = None
+    review_score: float | None = None
+    offer: Offer
+    quote: Quote | None = None
     caveats: tuple[str, ...] = ()
 
+    @model_validator(mode="after")
+    def chronological(self) -> Self:
+        if self.check_out <= self.check_in:
+            raise ValueError("Stay must include at least one night")
+        return self
 
-class MatchEvent(FrozenModel):
-    kind: Literal["match"] = "match"
+
+class Journey(Record):
     id: str
-    fixture: FixtureSnapshot
-    recommended_arrival_at: datetime
-    ticket_included: Literal[False] = False
+    route_id: str
+    outbound: tuple[Leg, ...] = Field(min_length=1, max_length=4)
+    inbound: tuple[Leg, ...] = Field(min_length=1, max_length=4)
 
 
-ItineraryItem = Annotated[TransportLeg | Stay | MatchEvent, Field(discriminator="kind")]
-
-
-class TripAlternative(FrozenModel):
-    id: str
-    label: str
+class Alternative(Record):
+    journey: Journey
+    stay: Stay
+    known_total: Money | None = None
+    price_coverage: float = Field(0, ge=0, le=1)
     summary: str
-    estimated_total: Money | None = None
 
 
-class FixtureTrip(FrozenModel):
-    id: str
-    fixture_ids: tuple[str, ...]
-    title: str
-    items: tuple[ItineraryItem, ...]
-    alternatives: tuple[TripAlternative, ...] = ()
-    estimated_total: Money | None = None
-    per_person_total: Money | None = None
-    tradeoffs: tuple[str, ...] = ()
-    booking_order: tuple[str, ...] = ()
+class Trip(Record):
+    fixture: Fixture
+    journey: Journey | None = None
+    stay: Stay | None = None
+    known_total: Money | None = None
+    price_coverage: float = Field(0, ge=0, le=1)
+    feasibility: Literal["verified", "needs_checks"] = "needs_checks"
+    gaps: tuple[str, ...] = ()
+    summary: str
+    transfers: tuple[TransferGuidance, ...] = Field((), max_length=5)
+    alternatives: tuple[Alternative, ...] = Field((), max_length=2)
 
 
-class Itinerary(FrozenModel):
-    id: str
+class Itinerary(Record):
     revision: int = Field(ge=1)
-    title: str
-    summary: str
-    trips: tuple[FixtureTrip, ...]
-    assumptions: tuple[str, ...] = ()
-    generated_at: datetime
+    generated_at: AwareDatetime
+    trips: tuple[Trip, ...] = Field(min_length=1, max_length=4)
+    caveats: tuple[str, ...] = (
+        "Prices may have changed since retrieval. Confirm the full price before booking.",
+        "Match tickets and travel to/from your London departure hub are not included.",
+    )
+    ranking_policy_version: str = "1"
 
 
-class TranscriptMessage(FrozenModel):
-    id: str
-    role: Literal["user", "assistant"]
-    body: str
-    created_at: datetime
+class Command(Record):
+    id: UUID
+    expected_revision: int | None = Field(None, ge=0)
 
 
-class SessionSnapshot(FrozenModel):
-    public_id: UUID
-    phase: SessionPhase
-    progress: str
-    state_revision: int = 0
-    itinerary: Itinerary | None = None
-    messages: tuple[TranscriptMessage, ...] = ()
-    email_status: Literal["not_sent", "sending", "sent", "failed"] = "not_sent"
-    finalization_reason: Literal["manual", "inactivity"] | None = None
+class MessageCommand(Command):
+    text: str = Field(min_length=1, max_length=2000)
 
 
-class WorkflowStartInput(FrozenModel):
-    public_id: UUID
-    request: PlanningRequest
-    fixtures: tuple[FixtureSnapshot, ...]
-    inactivity_timeout_seconds: int
-    planner_mode: Literal["mock", "openai"] = "mock"
-
-
-class PlanActivityInput(FrozenModel):
-    public_id: UUID
-    request: PlanningRequest
-    fixtures: tuple[FixtureSnapshot, ...]
-    revision: int
-    turn_id: str
-    user_message: str | None = None
-    planner_mode: Literal["mock", "openai"] = "mock"
-
-
-class MessageCommand(FrozenModel):
+class Receipt(Record):
     command_id: UUID
-    body: str = Field(min_length=1, max_length=2_000)
-
-
-class FinalizeCommand(FrozenModel):
-    command_id: UUID
-
-
-class CommandReceipt(FrozenModel):
     accepted: bool
-    duplicate: bool = False
+    reason: Literal["accepted", "busy", "closed", "stale"] = "accepted"
 
 
-class EmailActivityInput(FrozenModel):
-    public_id: UUID
-    contact_id: UUID
-    itinerary: Itinerary
-    reason: Literal["manual", "inactivity"]
+class ChatTurn(Record):
+    id: str
+    turn_id: UUID
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=6000)
+    created_at: AwareDatetime
 
 
-class EmailActivityResult(FrozenModel):
-    provider_message_id: str
-
-
-class StatusEvent(FrozenModel):
-    type: Literal["status"] = "status"
-    message: str
-    state_revision: int
-
-
-class TextDeltaEvent(FrozenModel):
-    type: Literal["text_delta"] = "text_delta"
-    turn_id: str
-    attempt: int
-    text: str
-
-
-class TurnCommittedEvent(FrozenModel):
-    type: Literal["turn_committed"] = "turn_committed"
-    turn_id: str
-    state_revision: int
-    itinerary_revision: int
-
-
-class RetryEvent(FrozenModel):
-    type: Literal["retry"] = "retry"
-    turn_id: str
-    attempt: int
-
-
-class SessionClosedEvent(FrozenModel):
-    type: Literal["session_closed"] = "session_closed"
-    state_revision: int
-
-
-class StreamEventEnvelope(FrozenModel):
-    """Common decode shape for a subscription spanning heterogeneous topics."""
-
-    type: Literal["status", "text_delta", "turn_committed", "retry", "session_closed"]
-    message: str | None = None
-    state_revision: int | None = None
-    turn_id: str | None = None
-    attempt: int | None = None
-    text: str | None = None
-    itinerary_revision: int | None = None
-
-
-StreamEvent = Annotated[
-    StatusEvent | TextDeltaEvent | TurnCommittedEvent | RetryEvent | SessionClosedEvent,
-    Field(discriminator="type"),
+Phase = Literal[
+    "created",
+    "researching",
+    "draft_ready",
+    "revising",
+    "finalizing",
+    "emailed",
+    "failed",
+    "email_failed",
 ]
+
+
+class Snapshot(Record):
+    development_mode: bool = False
+    public_session_id: UUID
+    state_revision: int = 0
+    phase: Phase = "created"
+    progress_message: str = "Checking routes from London…"
+    itinerary: Itinerary | None = None
+    transcript_tail: tuple[ChatTurn, ...] = ()
+    active_turn_id: UUID | None = None
+    last_committed_turn_id: UUID | None = None
+    email_deadline: AwareDatetime
+    interaction_deadline: AwareDatetime
+    follow_ups_remaining: int = 10
+    finalization_reason: Literal["manual", "inactivity", "limit", "planning_failed"] | None = None
+    email_kind: Literal["itinerary", "failure_notice"] | None = None
+    email_status: Literal["not_requested", "pending", "sent", "failed"] = "not_requested"
+    email_provider_id: str | None = None
+
+
+class SearchSpec(Record):
+    fixture: Fixture
+    route: Route
+    party: Party
+    outbound_date: date
+    return_date: date
+    budget_tier: Literal["budget", "value", "comfort"] = "value"
+    private_room: bool = False
+    private_bathroom: bool = False
+
+
+class SearchBatch(Record):
+    journeys: tuple[Journey, ...] = ()
+    stays: tuple[Stay, ...] = ()
+    gaps: tuple[str, ...] = ()
+    calls: int = 0

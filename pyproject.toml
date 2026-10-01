@@ -1,77 +1,37 @@
-[project]
-name = "cpfc-europa-trip"
-version = "0.1.0"
-description = "Durable Europa League away-trip planning, sponsored by Temporal"
-readme = "README.md"
-requires-python = ">=3.13,<3.15"
-dependencies = [
-  "alembic>=1.15",
-  "asyncpg>=0.30",
-  "email-validator>=2.2",
-  "fastapi>=0.118",
-  "httpx>=0.28",
-  "logfire>=4.41.0",
-  "psycopg[binary]>=3.2",
-  "pydantic-ai-slim[openai,temporal]>=1.0",
-  "pydantic-settings>=2.10",
-  "resend>=2.7",
-  "sqlalchemy[asyncio]>=2.0",
-  "temporalio>=1.27,<2",
-  "uvicorn[standard]>=0.35",
-]
-
-[project.scripts]
-cpfc-api = "cpfc_trip.api:run"
-cpfc-worker = "cpfc_trip.temporal.worker:run"
-cpfc-db = "cpfc_trip.persistence.admin:run"
-
-[dependency-groups]
-dev = [
-  "mypy>=1.17",
-  "pydantic-evals>=2.39.0",
-  "pytest>=8.4",
-  "pytest-asyncio>=1.1",
-  "pytest-cov>=7",
-  "ruff>=0.12",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cpfc_trip"]
-
-[tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers -ra"
-asyncio_mode = "auto"
-testpaths = ["tests"]
-markers = [
-  "integration: requires PostgreSQL and the local Temporal development server",
+[project]
+name = "cpfc-trip"
+version = "0.1.0"
+description = "London-based Palace away-trip planner"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi>=0.115", "uvicorn[standard]>=0.34", "pydantic[email]>=2.13",
+  "pydantic-settings>=2.10", "pydantic-ai-slim[google,temporal]>=2.40,<3",
+  "temporalio>=1.32,<2", "httpx>=0.28", "sqlalchemy[asyncio]>=2.0",
+  "asyncpg>=0.30", "alembic>=1.16", "cryptography>=45", "svix>=1.60",
+  "logfire[fastapi]>=4", "cloud-sql-python-connector[asyncpg]>=1.18",
 ]
+[project.scripts]
+cpfc-api = "cpfc_trip.api:main"
+cpfc-worker = "cpfc_trip.temporal.worker:main"
+cpfc-db = "cpfc_trip.persistence.admin:main"
 
-[tool.coverage.run]
-branch = true
-source = ["cpfc_trip"]
-
-[tool.mypy]
-python_version = "3.13"
-strict = true
-plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
-packages = ["cpfc_trip"]
-
-[[tool.mypy.overrides]]
-module = ["resend", "resend.*"]
-ignore_missing_imports = true
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.12", "mypy>=1.17", "aiosqlite>=0.21", "respx>=0.22"]
 
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-extend-exclude = ["planning"]
-
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "ASYNC", "RUF"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
-"src/cpfc_trip/temporal/workflow.py" = ["RUF012"]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["E501"]
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

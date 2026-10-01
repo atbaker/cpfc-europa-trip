@@ -1,350 +1,309 @@
-"""FastAPI boundary for the static web client."""
+"""JSON-only API. All active session reads Query Temporal directly."""
 
-from __future__ import annotations
-
-import asyncio
-import hashlib
-import hmac
-import json
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
-from typing import Annotated, Any
-from uuid import UUID, uuid4
+import re
+import time
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, cast
+from uuid import UUID
 
 import uvicorn
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from temporalio.api.workflowservice.v1 import GetSystemInfoRequest
-from temporalio.client import Client, WorkflowHandle
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
+from svix.webhooks import Webhook, WebhookVerificationError
+from temporalio.client import Client, WorkflowQueryFailedError, WorkflowUpdateFailedError
+from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
+from temporalio.service import RPCError
 
-from cpfc_trip.config import Settings, get_settings
-from cpfc_trip.domain import (
-    CommandReceipt,
-    FinalizeCommand,
-    FixtureSnapshot,
-    MessageCommand,
-    PlanningRequest,
-    SessionCreateBody,
-    SessionSnapshot,
-    StreamEventEnvelope,
-    TravellerParty,
-    WorkflowStartInput,
-)
-from cpfc_trip.fixtures import all_fixtures, fixtures_by_id
-from cpfc_trip.observability import instrument_fastapi
+from cpfc_trip.catalog import load_catalog
+from cpfc_trip.config import Settings
+from cpfc_trip.domain import Command, CreateSession, MessageCommand, Receipt, Snapshot
 from cpfc_trip.persistence.database import engine
-from cpfc_trip.persistence.repository import (
-    StoredSession,
-    create_session,
-    find_session,
-    find_session_by_request,
-    latest_delivery,
-)
-from cpfc_trip.temporal.client import connect_temporal
+from cpfc_trip.persistence.models import DeliveryRow, WebhookRow
+from cpfc_trip.persistence.repository import Repository
+from cpfc_trip.temporal.client import connect
 from cpfc_trip.temporal.workflow import TravelPlanningSessionWorkflow
 
-COOKIE_NAME = "cpfc_session"
+
+class EmailEventData(BaseModel):
+    email_id: str = Field(min_length=1, max_length=100)
+    tags: dict[str, str] = Field(default_factory=dict)
 
 
-class ApiModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class EmailEvent(BaseModel):
+    type: str = Field(min_length=1, max_length=64)
+    data: EmailEventData
 
 
-class SessionCreated(ApiModel):
-    public_id: UUID
-    snapshot_url: str
+DELIVERY_STATUS_ORDER = {"email.delivered": 1, "email.bounced": 2, "email.complained": 3}
 
 
-class MessageBody(ApiModel):
-    command_id: UUID
-    body: str = Field(min_length=1, max_length=2_000)
+class LocalLimiter:
+    """Local development limiter. The public deployment also requires shared edge quotas."""
 
+    def __init__(self) -> None:
+        self.hits: dict[str, deque[float]] = defaultdict(deque)
 
-class FinalizeBody(ApiModel):
-    command_id: UUID
-
-
-class EmailPreview(ApiModel):
-    status: str
-    subject: str
-    html: str
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.temporal = await connect_temporal()
-    yield
-    await engine().dispose()
-
-
-app = FastAPI(
-    title="Crystal Palace Away Days API",
-    version="0.1.0",
-    lifespan=lifespan,
-)
-settings = get_settings()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Idempotency-Key", "Last-Event-ID"],
-)
-instrument_fastapi(app)
-
-
-@app.middleware("http")
-async def disable_api_caching(request: Request, call_next: Any) -> Response:
-    response: Response = await call_next(request)
-    if request.url.path.startswith(("/api", "/healthz", "/readyz")):
-        response.headers["Cache-Control"] = "no-store"
-    return response
-
-
-@app.get("/healthz")
-async def healthz() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/readyz")
-async def readyz(request: Request) -> dict[str, str]:
-    temporal: Client = request.app.state.temporal
-    try:
-        await temporal.workflow_service.get_system_info(GetSystemInfoRequest())
-    except Exception as exc:  # pragma: no cover - service boundary
-        raise HTTPException(status_code=503, detail="Temporal is unavailable") from exc
-    return {"status": "ready"}
-
-
-@app.get("/api/fixtures", response_model=tuple[FixtureSnapshot, ...])
-async def get_fixtures() -> tuple[FixtureSnapshot, ...]:
-    return all_fixtures()
-
-
-@app.post("/api/sessions", response_model=SessionCreated, status_code=status.HTTP_202_ACCEPTED)
-async def start_session(
-    body: SessionCreateBody, response: Response, request: Request
-) -> SessionCreated:
-    try:
-        selected_fixtures = fixtures_by_id(body.fixture_ids)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    stored = await find_session_by_request(body.request_id)
-    if stored is None:
-        public_id = uuid4()
-        token = _access_token(public_id, settings)
-        try:
-            stored = await create_session(
-                request_id=body.request_id,
-                email=str(body.email),
-                public_id=public_id,
-                token_hash=_hash_token(token),
+    def check(self, key: str, limit: int, seconds: int = 60) -> None:
+        now = time.monotonic()
+        if len(self.hits) > 10000:
+            self.hits = defaultdict(
+                deque, {k: v for k, v in self.hits.items() if v and v[-1] > now - seconds}
             )
-        except IntegrityError:
-            stored = await find_session_by_request(body.request_id)
-            if stored is None:  # pragma: no cover - defensive concurrency guard
-                raise
-
-    token = _access_token(stored.public_id, settings)
-    planning_request = PlanningRequest(
-        fixture_ids=body.fixture_ids,
-        origin=body.origin,
-        travellers=TravellerParty(adults=body.adults, child_ages=body.child_ages, rooms=body.rooms),
-        flexibility_days=body.flexibility_days,
-        budget_tier=body.budget_tier,
-        extra_instructions=body.extra_instructions,
-        contact_id=stored.contact_id,
-        request_id=body.request_id,
-    )
-    workflow_input = WorkflowStartInput(
-        public_id=stored.public_id,
-        request=planning_request,
-        fixtures=selected_fixtures,
-        inactivity_timeout_seconds=settings.inactivity_timeout_seconds,
-        planner_mode=settings.planner_mode,
-    )
-    temporal: Client = request.app.state.temporal
-    try:
-        await temporal.start_workflow(
-            TravelPlanningSessionWorkflow.run,
-            workflow_input,
-            id=stored.workflow_id,
-            task_queue=settings.temporal_task_queue,
-        )
-    except WorkflowAlreadyStartedError:
-        pass
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="Unable to start the planning session") from exc
-
-    response.set_cookie(
-        COOKIE_NAME,
-        f"{stored.public_id}.{token}",
-        httponly=True,
-        secure=settings.app_env == "production",
-        samesite="lax",
-        max_age=30 * 24 * 60 * 60,
-        path="/",
-    )
-    return SessionCreated(
-        public_id=stored.public_id,
-        snapshot_url=f"/api/sessions/{stored.public_id}",
-    )
+        q = self.hits[key]
+        while q and q[0] < now - seconds:
+            q.popleft()
+        if len(q) >= limit:
+            raise HTTPException(
+                429, "Too many requests; please try again shortly", headers={"Retry-After": "10"}
+            )
+        q.append(now)
 
 
-async def _authorized_session(
-    public_id: UUID,
-    cookie: Annotated[str | None, Cookie(alias=COOKIE_NAME)] = None,
-) -> StoredSession:
-    if cookie is None:
-        raise HTTPException(status_code=401, detail="Session cookie is missing")
-    cookie_public_id, separator, token = cookie.partition(".")
-    if not separator or cookie_public_id != str(public_id):
-        raise HTTPException(status_code=403, detail="Session cookie does not match")
-    stored = await find_session(public_id)
-    if stored is None or not hmac.compare_digest(_hash_token(token), stored.access_token_hash):
-        raise HTTPException(status_code=403, detail="Session access is invalid")
-    return stored
+def create_app(
+    settings: Settings | None = None,
+    repository: Repository | None = None,
+    temporal: Client | None = None,
+) -> FastAPI:
+    config = settings or Settings()
+    limiter = LocalLimiter()
 
-
-@app.get("/api/sessions/{public_id}", response_model=SessionSnapshot)
-async def get_snapshot(
-    request: Request,
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-) -> SessionSnapshot:
-    handle = _workflow_handle(request, session)
-    try:
-        return await handle.query(TravelPlanningSessionWorkflow.get_snapshot)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="Planning session is unavailable") from exc
-
-
-@app.get("/api/sessions/{public_id}/events")
-async def session_events(
-    request: Request,
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
-) -> StreamingResponse:
-    try:
-        from_offset = int(last_event_id) + 1 if last_event_id is not None else 0
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Last-Event-ID must be an integer") from exc
-    if from_offset < 0:
-        raise HTTPException(status_code=400, detail="Last-Event-ID is out of range")
-
-    temporal: Client = request.app.state.temporal
-    stream = WorkflowStreamClient.create(temporal, session.workflow_id)
-
-    async def event_source() -> AsyncIterator[str]:
-        iterator = stream.subscribe(from_offset=from_offset, result_type=StreamEventEnvelope)
-        pending: asyncio.Future[Any] | None = None
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+        db = engine(config)
+        app.state.repository = repository or Repository(db, config)
+        app.state.temporal = temporal or await connect(config)
         try:
-            while True:
-                pending = asyncio.ensure_future(anext(iterator))
-                while not pending.done():
-                    done, _ = await asyncio.wait({pending}, timeout=15)
-                    if not done:
-                        yield ": heartbeat\n\n"
-                try:
-                    item = pending.result()
-                except StopAsyncIteration:
-                    return
-                data = item.data.model_dump(mode="json")
-                yield f"id: {item.offset}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
-                if await request.is_disconnected():
-                    return
+            yield
         finally:
-            if pending and not pending.done():
-                pending.cancel()
-                with suppress(asyncio.CancelledError):
-                    await pending
+            await db.dispose()
 
-    return StreamingResponse(
-        event_source(),
-        media_type="text/event-stream",
-        headers={"X-Accel-Buffering": "no", "Connection": "keep-alive"},
-    )
-
-
-@app.post("/api/sessions/{public_id}/messages", response_model=CommandReceipt)
-async def submit_message(
-    body: MessageBody,
-    request: Request,
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-) -> CommandReceipt:
-    handle = _workflow_handle(request, session)
-    try:
-        return await handle.execute_update(
-            TravelPlanningSessionWorkflow.submit_message,
-            MessageCommand(command_id=body.command_id, body=body.body),
+    app = FastAPI(title="Eagles Away", version="0.1.0", lifespan=lifespan)
+    if config.app_env != "production":
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[config.frontend_origin],
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Content-Type", "X-Submission-Token"],
         )
-    except Exception as exc:
-        raise HTTPException(status_code=409, detail="Message was not accepted") from exc
 
-
-@app.post("/api/sessions/{public_id}/finalize", response_model=CommandReceipt)
-async def finalize_session(
-    body: FinalizeBody,
-    request: Request,
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-) -> CommandReceipt:
-    handle = _workflow_handle(request, session)
-    try:
-        return await handle.execute_update(
-            TravelPlanningSessionWorkflow.request_finalize,
-            FinalizeCommand(command_id=body.command_id),
+    @app.middleware("http")
+    async def protect(request: Request, call_next: Any) -> Response:
+        if request.method == "POST" and request.url.path.startswith("/api/"):
+            if request.headers.get("origin") != config.frontend_origin:
+                return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
+        if int(request.headers.get("content-length", "0")) > 32000:
+            return JSONResponse({"detail": "Request is too large"}, status_code=413)
+        response: Response = await call_next(request)
+        response.headers.update(
+            {
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Referrer-Policy": "no-referrer",
+            }
         )
-    except Exception as exc:
-        raise HTTPException(status_code=409, detail="Finalization was not accepted") from exc
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> Response:
+        # FastAPI's default errors include input values, potentially echoing an email/token.
+        return JSONResponse(
+            {"detail": [{"loc": x["loc"], "msg": x["msg"]} for x in exc.errors()]}, status_code=422
+        )
+
+    def repo(request: Request) -> Repository:
+        return request.app.state.repository  # type: ignore[no-any-return]
+
+    def client(request: Request) -> Client:
+        return request.app.state.temporal  # type: ignore[no-any-return]
+
+    def ip(request: Request) -> str:
+        # Do not trust arbitrary forwarded IP headers. The deployment proxy is configured separately.
+        return request.client.host if request.client else "unknown"
+
+    async def authorize(request: Request, public_id: UUID) -> None:
+        token = request.cookies.get(f"cpfc_{public_id}", "")
+        if not token or not await repo(request).authorize(public_id, token):
+            raise HTTPException(404, "Session not found or access expired")
+
+    @app.get("/api/catalog")
+    async def catalog() -> dict[str, Any]:
+        fixtures, routes = load_catalog()
+        if config.planner_mode == "live":
+            enabled = {r.fixture_id for r in routes if r.enabled}
+            fixtures = tuple(f for f in fixtures if f.id in enabled)
+        return {
+            "fixtures": fixtures,
+            "origin": "London",
+            "development_mode": config.planner_mode == "recorded",
+        }
+
+    @app.post("/api/sessions", status_code=202)
+    async def create(
+        body: CreateSession,
+        request: Request,
+        response: Response,
+        token: Annotated[str, Header(alias="X-Submission-Token")],
+    ) -> dict[str, Any]:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43,128}", token):
+            raise HTTPException(422, "A strong submission token is required")
+        limiter.check(f"create:{ip(request)}", 5)
+        try:
+            data = await repo(request).create(body, token)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        except PermissionError:
+            raise HTTPException(409, "Submission ID is already in use") from None
+        try:
+            await client(request).start_workflow(
+                TravelPlanningSessionWorkflow.run,
+                data,
+                id=f"travel-session/{data.public_session_id}",
+                task_queue=config.temporal_task_queue,
+                id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+                rpc_timeout=timedelta(seconds=5),
+            )
+        except WorkflowAlreadyStartedError:
+            pass
+        except RPCError:
+            raise HTTPException(
+                503, "Planning is temporarily unavailable. Retry this same submission."
+            ) from None
+        response.set_cookie(
+            f"cpfc_{data.public_session_id}",
+            token,
+            httponly=True,
+            secure=config.app_env == "production",
+            samesite="lax",
+            path=f"/api/sessions/{data.public_session_id}",
+        )
+        return {"public_session_id": data.public_session_id}
+
+    @app.get("/api/sessions/{public_id}/snapshot", response_model=Snapshot | None)
+    async def snapshot(
+        public_id: UUID, request: Request, after_revision: Annotated[int | None, Query(ge=0)] = None
+    ) -> Snapshot | Response:
+        await authorize(request, public_id)
+        limiter.check(f"poll:{public_id}", 90)
+        handle = client(request).get_workflow_handle(f"travel-session/{public_id}")
+        try:
+            value = await handle.query(
+                TravelPlanningSessionWorkflow.get_snapshot,
+                after_revision,
+                rpc_timeout=timedelta(seconds=5),
+            )
+        except (RPCError, WorkflowQueryFailedError):
+            raise HTTPException(503, "Reconnecting to your saved planning session") from None
+        return value if value else Response(status_code=204)
+
+    async def update(
+        request: Request, public_id: UUID, command: Command, finalize: bool
+    ) -> Receipt:
+        await authorize(request, public_id)
+        limiter.check(f"command:{public_id}", 20)
+        handle = client(request).get_workflow_handle(f"travel-session/{public_id}")
+        name = "request_finalize" if finalize else "submit_message"
+        try:
+            result = await handle.execute_update(
+                name,
+                command,
+                id=f"{name}/{command.id}",
+                result_type=Receipt,
+                rpc_timeout=timedelta(seconds=5),
+            )
+        except (RPCError, WorkflowUpdateFailedError):
+            raise HTTPException(
+                503, "Could not confirm acceptance. Retry the same command."
+            ) from None
+        if not result.accepted:
+            raise HTTPException(409, result.reason)
+        return cast(Receipt, result)
+
+    @app.post("/api/sessions/{public_id}/messages", response_model=Receipt, status_code=202)
+    async def message(public_id: UUID, body: MessageCommand, request: Request) -> Receipt:
+        return await update(request, public_id, body, False)
+
+    @app.post("/api/sessions/{public_id}/finalize", response_model=Receipt, status_code=202)
+    async def finalize(public_id: UUID, body: Command, request: Request) -> Receipt:
+        return await update(request, public_id, body, True)
+
+    @app.post("/webhooks/resend")
+    async def webhook(request: Request) -> Response:
+        key = config.resend_webhook_secret.get_secret_value()
+        if not key:
+            raise HTTPException(503, "Webhook is not configured")
+        raw = await request.body()
+        if len(raw) > 32000:
+            raise HTTPException(413)
+        try:
+            Webhook(key).verify(raw.decode(), dict(request.headers))
+            event = EmailEvent.model_validate_json(raw)
+        except (WebhookVerificationError, ValueError):
+            raise HTTPException(400, "Invalid signature") from None
+        event_id = request.headers["svix-id"]
+        if len(event_id) > 128:
+            raise HTTPException(400, "Invalid event ID")
+        if event.type not in DELIVERY_STATUS_ORDER:
+            return Response(status_code=200)
+        async with repo(request).sessions() as db, db.begin():
+            if await db.get(WebhookRow, event_id):
+                return Response(status_code=200)
+            # A signed session tag also reconciles an accepted send whose HTTP receipt was lost.
+            # Locking serializes this with the send transaction, even before provider_id is saved.
+            sid = event.data.tags.get("session_id")
+            delivery = await db.scalar(
+                select(DeliveryRow)
+                .where(
+                    DeliveryRow.session_id == sid
+                    if sid
+                    else DeliveryRow.provider_id == event.data.email_id
+                )
+                .with_for_update()
+            )
+            if delivery:
+                if delivery.provider_id and delivery.provider_id != event.data.email_id:
+                    raise HTTPException(409, "Email receipt does not match the saved delivery")
+                delivery.provider_id = event.data.email_id
+                if DELIVERY_STATUS_ORDER[event.type] > DELIVERY_STATUS_ORDER.get(
+                    delivery.status, 0
+                ):
+                    delivery.status = event.type
+                db.add(
+                    WebhookRow(id=event_id, received_at=datetime.now(UTC), event_type=event.type)
+                )
+            try:
+                await db.flush()
+            except IntegrityError:
+                await db.rollback()
+        return Response(status_code=200)
+
+    @app.get("/healthz")
+    async def health() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.get("/readyz")
+    async def ready(request: Request) -> dict[str, bool]:
+        try:
+            async with repo(request).sessions() as db:
+                await db.execute(text("SELECT 1"))
+            await client(request).service_client.check_health(timeout=timedelta(seconds=3))
+        except Exception:
+            raise HTTPException(503, "Dependencies are not ready") from None
+        return {"ok": True}
+
+    return app
 
 
-@app.get("/api/sessions/{public_id}/email-preview", response_model=EmailPreview)
-async def email_preview(
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-) -> EmailPreview:
-    if settings.app_env == "production":
-        raise HTTPException(status_code=404, detail="Not found")
-    delivery = await latest_delivery(session.public_id)
-    if delivery is None:
-        raise HTTPException(status_code=404, detail="No email has been generated yet")
-    return EmailPreview(
-        status=delivery.status,
-        subject=delivery.subject,
-        html=delivery.preview_html,
+def main() -> None:
+    uvicorn.run(
+        "cpfc_trip.api:create_app", factory=True, host="0.0.0.0", port=8000, access_log=False
     )
-
-
-@app.get("/api/sessions/{public_id}/email-preview/render", response_class=HTMLResponse)
-async def render_email_preview(
-    session: Annotated[StoredSession, Depends(_authorized_session)],
-) -> HTMLResponse:
-    if settings.app_env == "production":
-        raise HTTPException(status_code=404, detail="Not found")
-    delivery = await latest_delivery(session.public_id)
-    if delivery is None:
-        raise HTTPException(status_code=404, detail="No email has been generated yet")
-    return HTMLResponse(delivery.preview_html)
-
-
-def _workflow_handle(request: Request, session: StoredSession) -> WorkflowHandle[Any, Any]:
-    temporal: Client = request.app.state.temporal
-    return temporal.get_workflow_handle(session.workflow_id)
-
-
-def _access_token(public_id: UUID, settings: Settings) -> str:
-    return hmac.new(
-        settings.session_secret.encode(), str(public_id).encode(), hashlib.sha256
-    ).hexdigest()
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def run() -> None:
-    uvicorn.run("cpfc_trip.api:app", host="0.0.0.0", port=8000)

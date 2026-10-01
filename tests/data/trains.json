@@ -1,0 +1,92 @@
+{
+  "search_metadata": {
+    "created_at": "2026-09-06T17:27:29Z",
+    "request_url": "https://www.google.com/search?q=trains+from+London+to+Paris+on+04+October+2026&oq=trains+from+London+to+Paris+on+04+October+2026&gl=uk&hl=en"
+  },
+  "search_parameters": {
+    "engine": "google",
+    "q": "trains from London to Paris on 04 October 2026",
+    "device": "desktop",
+    "hl": "en",
+    "gl": "uk"
+  },
+  "train_results": {
+    "origin": "London",
+    "destination": "Paris",
+    "date": "2026-10-04",
+    "trains": [
+      {
+        "position": 1,
+        "time_window": {
+          "depart_at": "08:01",
+          "depart_at_iso": "2026-10-04T08:01:00+01:00",
+          "arrive_at": "11:42",
+          "arrive_at_iso": "2026-10-04T11:42:00+02:00"
+        },
+        "formatted_duration": "2h 41m",
+        "duration": 9660,
+        "transfers": 0,
+        "price": "£58",
+        "extracted_price": 58,
+        "currency": "GBP",
+        "service_provider": {
+          "name": "Eurostar",
+          "website": "http://www.eurostar.com/",
+          "favicon": "https://www.gstatic.com/transport/partners/svg_light/eurostar.svg"
+        },
+        "buy_ticket": {
+          "price": "£58",
+          "offers": [
+            {
+              "source": "Eurostar",
+              "price": "£58",
+              "extracted_price": 58,
+              "currency": "GBP",
+              "link": "https://www.eurostar.com/google/redirect?service_date=%5B%2220261004%22%5D&from_ticketing_stop_time_id=%5B%227015400%22%5D&to_ticketing_stop_time_id=%5B%228727100%22%5D&boarding_time=%5B%222026-10-04T07:01:00%2B00:00%22%5D&arrival_time=%5B%222026-10-04T09:42:00%2B00:00%22%5D&booking_token=%7B%22departureTime%22:%2208:01%22,%22arrivalTime%22:%2211:42%22,%22serviceType%22:%22ES%22,%22serviceName%22:%229008%22%7D",
+              "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.eurostar.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+            },
+            {
+              "source": "Omio",
+              "price": "£58",
+              "extracted_price": 58,
+              "currency": "GBP",
+              "link": "https://www.omio.com/links/gtfs/ticketing?service_date=%5B%2220261004%22%5D&from_ticketing_stop_time_id=%5B%22319641%22%5D&to_ticketing_stop_time_id=%5B%22320757%22%5D&boarding_time=%5B%222026-10-04T07:01:00%2B00:00%22%5D&arrival_time=%5B%222026-10-04T09:42:00%2B00:00%22%5D&booking_token=AjXfaTjWM0C5mCJaFybNq6oVfbqf-4Zror-RUt61e7W2vvSRMpZtIUvtRhzi6IqLQRjrXbtgfteK",
+              "favicon": "https://www.gstatic.com/transport/partners/svg_light/omio.svg"
+            },
+            {
+              "source": "Tictactrip",
+              "price": "£324",
+              "extracted_price": 324,
+              "currency": "GBP",
+              "link": "https://api.tictactrip.eu/v3/google/redirect?service_date=%5B%2220261004%22%5D&from_ticketing_stop_time_id=%5B%22g%7CGBlonstpan@gcpvjh%22%5D&to_ticketing_stop_time_id=%5B%22g%7CFRparinord@u09wjd%22%5D&boarding_time=%5B%222026-10-04T07:01:00%2B00:00%22%5D&arrival_time=%5B%222026-10-04T09:42:00%2B00:00%22%5D",
+              "favicon": "https://www.gstatic.com/transport/partners/svg_light/tictactrip.svg"
+            }
+          ]
+        },
+        "instructions": [
+          {
+            "line": "9008",
+            "line_number": "9008",
+            "depart_from": {
+              "place": "St Pancras International",
+              "at": "08:01",
+              "at_iso": "2026-10-04T08:01:00+01:00"
+            },
+            "arrive_at": {
+              "place": "Gare du Nord",
+              "at": "11:42",
+              "at_iso": "2026-10-04T11:42:00+02:00",
+              "platform": "Hall 2 3-5"
+            },
+            "formatted_duration": "2h 41m",
+            "duration": 9660,
+            "service_provider": {
+              "name": "Eurostar",
+              "website": "http://www.eurostar.com/"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

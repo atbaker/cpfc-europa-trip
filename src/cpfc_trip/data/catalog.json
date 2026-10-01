@@ -1,0 +1,200 @@
+{
+  "fixtures": [
+    {
+      "id": "uel-2026-lyon-away",
+      "opponent": "Lyon",
+      "city": "Lyon",
+      "timezone": "Europe/Paris",
+      "kickoff_at": "2026-10-15T16:45:00Z",
+      "venue": "Groupama Stadium",
+      "venue_status": "provisional",
+      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+      "source_checked_at": "2026-09-07T21:30:00Z",
+      "catalog_version": "2026-09-07.lyon.1"
+    },
+    {
+      "id": "uel-2026-besiktas-away",
+      "opponent": "Beşiktaş",
+      "city": "Istanbul",
+      "timezone": "Europe/Istanbul",
+      "kickoff_at": "2026-10-22T19:00:00Z",
+      "venue": "Tüpraş Stadium",
+      "venue_status": "provisional",
+      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+      "source_checked_at": "2026-09-06T00:00:00Z",
+      "catalog_version": "2026-09-06.1"
+    },
+    {
+      "id": "uel-2026-jagiellonia-away",
+      "opponent": "Jagiellonia Białystok",
+      "city": "Białystok",
+      "timezone": "Europe/Warsaw",
+      "kickoff_at": "2026-12-10T17:45:00Z",
+      "venue": "Białystok City Stadium",
+      "venue_status": "provisional",
+      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+      "source_checked_at": "2026-09-06T00:00:00Z",
+      "catalog_version": "2026-09-06.1"
+    },
+    {
+      "id": "uel-2026-salzburg-away",
+      "opponent": "Salzburg",
+      "city": "Salzburg",
+      "timezone": "Europe/Vienna",
+      "kickoff_at": "2027-01-28T20:00:00Z",
+      "venue": "Red Bull Arena",
+      "venue_status": "provisional",
+      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
+      "source_checked_at": "2026-09-06T00:00:00Z",
+      "catalog_version": "2026-09-06.1"
+    }
+  ],
+  "routes": [
+    {
+      "id": "london-lys",
+      "fixture_id": "uel-2026-lyon-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "LYS",
+      "destination_timezone": "Europe/Paris",
+      "enabled": true,
+      "onward_stations": [],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Transfer guidance is based on published route information; fares, disruption and match-specific arrangements must be checked.",
+      "reviewed_at": "2026-09-07T21:30:00Z",
+      "guidance": [
+        {
+          "title": "Lyon airport ↔ Part-Dieu",
+          "description": "Rhônexpress links Lyon Saint-Exupéry airport and Part-Dieu in about 29 minutes. Published service runs daily, with 15–30 minute frequencies. This planner conservatively admits airport arrivals 06:00–21:59 and departures 08:00–22:59 local; these are planning limits, not departure times. Allow for airport formalities, the tram wait and travel to your hotel. Buy transfers separately and confirm the timetable.",
+          "source_url": "https://www.rhonexpress.fr/en_GB/discover-the-service",
+          "reviewed_at": "2026-09-07T21:30:00Z"
+        },
+        {
+          "title": "Getting to and from the match",
+          "description": "OL publishes direct tram shuttles from Part-Dieu Villette Sud to Groupama Stadium (normally under 20 minutes), with return shuttles after matches. Reserve the event transport ticket and check fixture-specific operating times and away-supporter instructions before booking. T7 changes operation when event shuttles start. Exact Palace-match shuttle times and fares are not yet confirmed.",
+          "source_url": "https://www.olvallee.fr/acces/",
+          "reviewed_at": "2026-09-07T21:30:00Z"
+        }
+      ],
+      "gateway_arrival_hours": [
+        6,
+        22
+      ],
+      "gateway_departure_hours": [
+        8,
+        23
+      ],
+      "source_urls": [
+        "https://www.rhonexpress.fr/en_GB/discover-the-service",
+        "https://www.olvallee.fr/acces/"
+      ]
+    },
+    {
+      "id": "london-ist",
+      "fixture_id": "uel-2026-besiktas-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "IST",
+      "destination_timezone": "Europe/Istanbul",
+      "enabled": false,
+      "onward_stations": [],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+    },
+    {
+      "id": "london-saw",
+      "fixture_id": "uel-2026-besiktas-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "SAW",
+      "destination_timezone": "Europe/Istanbul",
+      "enabled": false,
+      "onward_stations": [],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+    },
+    {
+      "id": "london-waw",
+      "fixture_id": "uel-2026-jagiellonia-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "WAW",
+      "destination_timezone": "Europe/Warsaw",
+      "enabled": false,
+      "onward_stations": [
+        "Warsaw",
+        "Białystok"
+      ],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+    },
+    {
+      "id": "london-szg",
+      "fixture_id": "uel-2026-salzburg-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "SZG",
+      "destination_timezone": "Europe/Vienna",
+      "enabled": false,
+      "onward_stations": [],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+    },
+    {
+      "id": "london-muc",
+      "fixture_id": "uel-2026-salzburg-away",
+      "mode": "flight",
+      "origin": "LHR,LGW,STN,LTN",
+      "destination": "MUC",
+      "destination_timezone": "Europe/Berlin",
+      "enabled": false,
+      "onward_stations": [
+        "Munich",
+        "Salzburg"
+      ],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+    },
+    {
+      "id": "london-paris-lyon",
+      "fixture_id": "uel-2026-lyon-away",
+      "mode": "rail",
+      "origin": "London",
+      "destination": "Lyon",
+      "destination_timezone": "Europe/Paris",
+      "enabled": true,
+      "onward_stations": [
+        "Paris"
+      ],
+      "minimum_transfer_minutes": 180,
+      "transfer_note": "Transfer guidance is based on published route information; fares, disruption and match-specific arrangements must be checked.",
+      "reviewed_at": "2026-09-07T21:30:00Z",
+      "guidance": [
+        {
+          "title": "Changing stations in Paris",
+          "description": "Eurostar uses Gare du Nord; the Lyon TGV uses Gare de Lyon. Eurostar describes the RER D connection as about 30 minutes. The planner requires at least three hours between trains in each direction, including walking and border/security time on the return. Connections are restricted to daytime and early evening. Local tickets cost extra; separately purchased train tickets do not automatically guarantee missed-connection protection. Check Eurostar arrival requirements before travel.",
+          "source_url": "https://www.eurostar.com/uk-en/train/london-to-lyon",
+          "reviewed_at": "2026-09-07T21:30:00Z"
+        },
+        {
+          "title": "Getting to and from the match",
+          "description": "OL publishes direct tram shuttles from Part-Dieu Villette Sud to Groupama Stadium (normally under 20 minutes), with return shuttles after matches. Reserve the event transport ticket and check fixture-specific operating times and away-supporter instructions before booking. T7 changes operation when event shuttles start. Exact Palace-match shuttle times and fares are not yet confirmed.",
+          "source_url": "https://www.olvallee.fr/acces/",
+          "reviewed_at": "2026-09-07T21:30:00Z"
+        }
+      ],
+      "gateway_arrival_hours": [
+        6,
+        23
+      ],
+      "gateway_departure_hours": [
+        6,
+        23
+      ],
+      "source_urls": [
+        "https://www.eurostar.com/uk-en/train/london-to-lyon",
+        "https://www.olvallee.fr/acces/"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,346 @@
+{
+  "London-Paris": {
+    "search_parameters": {
+      "engine": "google",
+      "q": "trains from London to Paris on 14 October 2026",
+      "device": "desktop",
+      "hl": "en",
+      "gl": "uk"
+    },
+    "train_results": {
+      "origin": "London",
+      "destination": "Paris",
+      "date": "2026-10-14",
+      "trains": [
+        {
+          "position": 7,
+          "time_window": {
+            "depart_at": "10:31",
+            "depart_at_iso": "2026-10-14T10:31:00+01:00",
+            "arrive_at": "13:59",
+            "arrive_at_iso": "2026-10-14T13:59:00+02:00"
+          },
+          "formatted_duration": "2h 28m",
+          "duration": 8880,
+          "transfers": 0,
+          "price": "\u00a3109",
+          "extracted_price": 109,
+          "currency": "GBP",
+          "service_provider": {
+            "name": "Eurostar",
+            "website": "http://www.eurostar.com/",
+            "favicon": "https://www.gstatic.com/transport/partners/svg_light/eurostar.svg"
+          },
+          "buy_ticket": {
+            "price": "\u00a3109",
+            "offers": [
+              {
+                "source": "Eurostar",
+                "price": "\u00a3113",
+                "extracted_price": 113,
+                "currency": "GBP",
+                "link": "https://www.eurostar.com/google/redirect?service_date=%5B%2220261014%22%5D&from_ticketing_stop_time_id=%5B%227015400%22%5D&to_ticketing_stop_time_id=%5B%228727100%22%5D&boarding_time=%5B%222026-10-14T09:31:00%2B00:00%22%5D&arrival_time=%5B%222026-10-14T11:59:00%2B00:00%22%5D&booking_token=%7B%22departureTime%22:%2210:31%22,%22arrivalTime%22:%2213:59%22,%22serviceType%22:%22ES%22,%22serviceName%22:%229018%22%7D",
+                "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.eurostar.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+              }
+            ]
+          },
+          "instructions": [
+            {
+              "line": "9018",
+              "line_number": "9018",
+              "depart_from": {
+                "place": "St Pancras International",
+                "at": "10:31",
+                "at_iso": "2026-10-14T10:31:00+01:00"
+              },
+              "arrive_at": {
+                "place": "Gare du Nord",
+                "at": "13:59",
+                "at_iso": "2026-10-14T13:59:00+02:00",
+                "platform": "Hall 2 3-5"
+              },
+              "formatted_duration": "2h 28m",
+              "duration": 8880,
+              "service_provider": {
+                "name": "Eurostar",
+                "website": "http://www.eurostar.com/"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "Paris-Lyon": {
+    "search_parameters": {
+      "engine": "google",
+      "q": "trains from Paris to Lyon on 14 October 2026",
+      "device": "desktop",
+      "hl": "en",
+      "gl": "uk"
+    },
+    "train_results": {
+      "origin": "Paris",
+      "destination": "Lyon",
+      "date": "2026-10-14",
+      "trains": [
+        {
+          "position": 22,
+          "time_window": {
+            "depart_at": "17:00",
+            "depart_at_iso": "2026-10-14T17:00:00+02:00",
+            "arrive_at": "18:56",
+            "arrive_at_iso": "2026-10-14T18:56:00+02:00"
+          },
+          "formatted_duration": "1h 56m",
+          "duration": 6960,
+          "transfers": 0,
+          "price": "\u00a356",
+          "extracted_price": 56,
+          "currency": "GBP",
+          "service_provider": {
+            "name": "SNCF Voyageurs",
+            "website": "https://www.sncf.com/fr",
+            "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.sncf.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+          },
+          "buy_ticket": {
+            "price": "\u00a356",
+            "offers": [
+              {
+                "source": "Omio",
+                "price": "\u00a356",
+                "extracted_price": 56,
+                "currency": "GBP",
+                "link": "https://www.omio.com/links/gtfs/ticketing?service_date=%5B%2220261014%22%5D&from_ticketing_stop_time_id=%5B%22320755%22%5D&to_ticketing_stop_time_id=%5B%22362017%22%5D&boarding_time=%5B%222026-10-14T15:00:00%2B00:00%22%5D&arrival_time=%5B%222026-10-14T16:56:00%2B00:00%22%5D&booking_token=AiNkeBtXfA_wgNJzgpCcbeKBwAc-q-YbjusicXk_J3EMsM5g7_RHrLDesAQPAV5XYy-3dW003AeJ",
+                "favicon": "https://www.gstatic.com/transport/partners/svg_light/omio.svg"
+              }
+            ]
+          },
+          "instructions": [
+            {
+              "line": "TGV INOUI 6687",
+              "line_name": "TGV INOUI",
+              "line_number": "6687",
+              "depart_from": {
+                "place": "Gare de Lyon",
+                "at": "17:00",
+                "at_iso": "2026-10-14T17:00:00+02:00"
+              },
+              "arrive_at": {
+                "place": "Lyon Part Dieu",
+                "at": "18:56",
+                "at_iso": "2026-10-14T18:56:00+02:00"
+              },
+              "formatted_duration": "1h 56m",
+              "duration": 6960,
+              "service_provider": {
+                "name": "SNCF Voyageurs",
+                "website": "https://www.sncf.com/fr"
+              }
+            }
+          ]
+        },
+        {
+          "position": 23,
+          "time_window": {
+            "depart_at": "17:00",
+            "depart_at_iso": "2026-10-14T17:00:00+02:00",
+            "arrive_at": "18:56",
+            "arrive_at_iso": "2026-10-14T18:56:00+02:00"
+          },
+          "formatted_duration": "1h 56m",
+          "duration": 6960,
+          "transfers": 0,
+          "price": "\u00a356",
+          "extracted_price": 56,
+          "currency": "GBP",
+          "service_provider": {
+            "name": "SNCF Voyageurs",
+            "website": "https://www.sncf.com/fr",
+            "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.sncf.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+          },
+          "buy_ticket": {
+            "price": "\u00a356",
+            "offers": [
+              {
+                "source": "Omio",
+                "price": "\u00a356",
+                "extracted_price": 56,
+                "currency": "GBP",
+                "link": "https://www.omio.com/links/gtfs/ticketing?service_date=%5B%2220261014%22%5D&from_ticketing_stop_time_id=%5B%22320755%22%5D&to_ticketing_stop_time_id=%5B%22362017%22%5D&boarding_time=%5B%222026-10-14T15:00:00%2B00:00%22%5D&arrival_time=%5B%222026-10-14T16:56:00%2B00:00%22%5D&booking_token=AiNkeBtXfA_wgNJzgpCcbeKBwAc-q-YbjusicXk_J3EMsM5g7_RHrLDesAQPAV5XYy-3dW003AeJ",
+                "favicon": "https://www.gstatic.com/transport/partners/svg_light/omio.svg"
+              }
+            ]
+          },
+          "instructions": [
+            {
+              "line": "TGV INOUI 6623",
+              "line_name": "TGV INOUI",
+              "line_number": "6623",
+              "depart_from": {
+                "place": "Gare de Lyon",
+                "at": "17:00",
+                "at_iso": "2026-10-14T17:00:00+02:00"
+              },
+              "arrive_at": {
+                "place": "Lyon Part Dieu",
+                "at": "18:56",
+                "at_iso": "2026-10-14T18:56:00+02:00"
+              },
+              "formatted_duration": "1h 56m",
+              "duration": 6960,
+              "service_provider": {
+                "name": "SNCF Voyageurs",
+                "website": "https://www.sncf.com/fr"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "Lyon-Paris": {
+    "search_parameters": {
+      "engine": "google",
+      "q": "trains from Lyon to Paris on 16 October 2026",
+      "device": "desktop",
+      "hl": "en",
+      "gl": "uk"
+    },
+    "train_results": {
+      "origin": "Lyon",
+      "destination": "Paris",
+      "date": "2026-10-16",
+      "trains": [
+        {
+          "position": 5,
+          "time_window": {
+            "depart_at": "07:04",
+            "depart_at_iso": "2026-10-16T07:04:00+02:00",
+            "arrive_at": "09:02",
+            "arrive_at_iso": "2026-10-16T09:02:00+02:00"
+          },
+          "formatted_duration": "1h 58m",
+          "duration": 7080,
+          "transfers": 0,
+          "price": "\u00a344",
+          "extracted_price": 44,
+          "currency": "GBP",
+          "service_provider": {
+            "name": "SNCF Voyageurs",
+            "website": "https://www.sncf.com/fr",
+            "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.sncf.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+          },
+          "buy_ticket": {
+            "price": "\u00a344",
+            "offers": [
+              {
+                "source": "Omio",
+                "price": "\u00a344",
+                "extracted_price": 44,
+                "currency": "GBP",
+                "link": "https://www.omio.com/links/gtfs/ticketing?service_date=%5B%2220261016%22%5D&from_ticketing_stop_time_id=%5B%22362017%22%5D&to_ticketing_stop_time_id=%5B%22320755%22%5D&boarding_time=%5B%222026-10-16T05:04:00%2B00:00%22%5D&arrival_time=%5B%222026-10-16T07:02:00%2B00:00%22%5D&booking_token=AkFY1FjYJG9sPiCGKBpal7ynMKf2c4CzuRct96xVJb_RsrAifLES1jfHow28BPLdNSjbs4NowabB",
+                "favicon": "https://www.gstatic.com/transport/partners/svg_light/omio.svg"
+              }
+            ]
+          },
+          "instructions": [
+            {
+              "line": "TGV INOUI 6690",
+              "line_name": "TGV INOUI",
+              "line_number": "6690",
+              "depart_from": {
+                "place": "Lyon Part Dieu",
+                "at": "07:04",
+                "at_iso": "2026-10-16T07:04:00+02:00"
+              },
+              "arrive_at": {
+                "place": "Gare de Lyon",
+                "at": "09:02",
+                "at_iso": "2026-10-16T09:02:00+02:00"
+              },
+              "formatted_duration": "1h 58m",
+              "duration": 7080,
+              "service_provider": {
+                "name": "SNCF Voyageurs",
+                "website": "https://www.sncf.com/fr"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "Paris-London": {
+    "search_parameters": {
+      "engine": "google",
+      "q": "trains from Paris to London on 16 October 2026",
+      "device": "desktop",
+      "hl": "en",
+      "gl": "uk"
+    },
+    "train_results": {
+      "origin": "Paris",
+      "destination": "London",
+      "date": "2026-10-16",
+      "trains": [
+        {
+          "position": 7,
+          "time_window": {
+            "depart_at": "12:02",
+            "depart_at_iso": "2026-10-16T12:02:00+02:00",
+            "arrive_at": "13:30",
+            "arrive_at_iso": "2026-10-16T13:30:00+01:00"
+          },
+          "formatted_duration": "2h 28m",
+          "duration": 8880,
+          "transfers": 0,
+          "price": "\u00a3104",
+          "extracted_price": 104,
+          "currency": "GBP",
+          "service_provider": {
+            "name": "Eurostar",
+            "website": "http://www.eurostar.com/",
+            "favicon": "https://www.gstatic.com/transport/partners/svg_light/eurostar.svg"
+          },
+          "buy_ticket": {
+            "price": "\u00a3104",
+            "offers": [
+              {
+                "source": "Eurostar",
+                "price": "\u00a3104",
+                "extracted_price": 104,
+                "currency": "GBP",
+                "link": "https://www.eurostar.com/google/redirect?service_date=%5B%2220261016%22%5D&from_ticketing_stop_time_id=%5B%228727100%22%5D&to_ticketing_stop_time_id=%5B%227015400%22%5D&boarding_time=%5B%222026-10-16T10:02:00%2B00:00%22%5D&arrival_time=%5B%222026-10-16T12:30:00%2B00:00%22%5D&booking_token=%7B%22departureTime%22:%2212:02%22,%22arrivalTime%22:%2213:30%22,%22serviceType%22:%22ES%22,%22serviceName%22:%229027%22%7D",
+                "favicon": "https://encrypted-tbn2.gstatic.com/faviconV2?url=https://www.eurostar.com&client=TRANSPORTATION&size=32&type=FAVICON&fallback_opts=TYPE,SIZE,URL&nfrp=1"
+              }
+            ]
+          },
+          "instructions": [
+            {
+              "line": "9027",
+              "line_number": "9027",
+              "depart_from": {
+                "place": "Gare du Nord",
+                "at": "12:02",
+                "at_iso": "2026-10-16T12:02:00+02:00",
+                "platform": "Hall 2 3-5"
+              },
+              "arrive_at": {
+                "place": "St Pancras International",
+                "at": "13:30",
+                "at_iso": "2026-10-16T13:30:00+01:00"
+              },
+              "formatted_duration": "2h 28m",
+              "duration": 8880,
+              "service_provider": {
+                "name": "Eurostar",
+                "website": "http://www.eurostar.com/"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

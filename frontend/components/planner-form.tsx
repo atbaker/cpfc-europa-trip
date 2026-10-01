@@ -1,294 +1,65 @@
 "use client";
-
-import { FormEvent, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-
-import { API_BASE_URL } from "@/lib/config";
-import { FIXTURES } from "@/lib/fixtures";
-import type { BudgetTier } from "@/lib/types";
-
-const BUDGETS: readonly {
-  id: BudgetTier;
-  symbol: string;
-  title: string;
-  detail: string;
-}[] = [
-  {
-    id: "budget",
-    symbol: "£",
-    title: "Keep it cheap",
-    detail: "Hostels and simple stays; indirect or overnight routes are fair game.",
-  },
-  {
-    id: "value",
-    symbol: "££",
-    title: "Best value",
-    detail: "Mid-range or boutique stays; balance price, time, and changes.",
-  },
-  {
-    id: "comfort",
-    symbol: "£££",
-    title: "Comfort first",
-    detail: "Four/five-star stays; favour direct routes and convenient times.",
-  },
-] as const;
+import { Brief, Fixture, request, londonDayBoundary } from "../lib/api";
 
 export function PlannerForm() {
   const router = useRouter();
-  const [selected, setSelected] = useState<string[]>([FIXTURES[0].id]);
-  const [origin, setOrigin] = useState("London");
+  const [fixtures, setFixtures] = useState<Fixture[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [budget, setBudget] = useState<Brief["budget_tier"]>("value");
   const [adults, setAdults] = useState(1);
-  const [children, setChildren] = useState(0);
-  const [childAges, setChildAges] = useState<number[]>([]);
-  const [rooms, setRooms] = useState(1);
-  const [flexibility, setFlexibility] = useState(1);
-  const [budget, setBudget] = useState<BudgetTier>("value");
-  const [email, setEmail] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const selectedLabel = useMemo(
-    () => `${selected.length} fixture${selected.length === 1 ? "" : "s"} selected`,
-    [selected.length],
-  );
-
-  function toggleFixture(id: string) {
-    setSelected((current) =>
-      current.includes(id) ? current.filter((fixtureId) => fixtureId !== id) : [...current, id],
-    );
-  }
-
-  function updateChildren(next: number) {
-    const count = Math.max(0, Math.min(6, next));
-    setChildren(count);
-    setChildAges((current) =>
-      count > current.length
-        ? [...current, ...Array.from({ length: count - current.length }, () => 8)]
-        : current.slice(0, count),
-    );
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (selected.length === 0) {
-      setError("Choose at least one away fixture.");
-      return;
+  const [children, setChildren] = useState<number[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sample, setSample] = useState(false);
+  const attempt = useRef<{ id: string; token: string; body: string } | null>(null);
+  useEffect(() => { let cancelled = false;
+    request<{ fixtures: Fixture[]; development_mode: boolean }>("/api/catalog").then(data => {
+      if (cancelled || !data) return;
+      const upcoming = data.fixtures.filter(f => new Date(f.kickoff_at) > new Date());
+      setFixtures(upcoming); setSelected(upcoming.slice(0, 1).map(f => f.id)); setSample(data.development_mode);
+    }).catch(() => { if (!cancelled) setError("The planner is unavailable. Please reload to try again."); });
+    return () => { cancelled = true; };
+  }, []);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    const form = new FormData(event.currentTarget);
+    if (selected.some(id => Boolean(form.get(`start-${id}`)) !== Boolean(form.get(`end-${id}`)))) {
+      setError("Enter both travel dates, or leave both blank for flexible dates."); setBusy(false); return;
     }
-    setSubmitting(true);
-    setError(null);
+    const brief: Brief = { fixture_ids: selected, travellers: { adults, child_ages: children, rooms: Number(form.get("rooms")) },
+      budget_tier: budget, flexibility: form.get("flexibility") as Brief["flexibility"], windows: selected.flatMap(id => {
+        const start = String(form.get(`start-${id}`) ?? ""); const end = String(form.get(`end-${id}`) ?? "");
+        return start && end ? [{ fixture_id: id, earliest_departure: londonDayBoundary(start), latest_return: londonDayBoundary(end, true) }] : [];
+      }), private_room: form.get("private_room") === "on", private_bathroom: form.get("private_bathroom") === "on",
+      transport_mode: (form.get("transport") || null) as Brief["transport_mode"], extra_instructions: String(form.get("instructions") ?? "") };
+    const content = JSON.stringify({ email: form.get("email"), brief });
+    if (!attempt.current || attempt.current.body !== content) attempt.current = { id: crypto.randomUUID(), token: [...crypto.getRandomValues(new Uint8Array(32))].map(x => x.toString(16).padStart(2, "0")).join(""), body: content };
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sessions`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request_id: crypto.randomUUID(),
-          email,
-          fixture_ids: selected,
-          origin,
-          adults,
-          child_ages: childAges,
-          rooms,
-          flexibility_days: flexibility,
-          budget_tier: budget,
-          extra_instructions: instructions || null,
-        }),
-      });
-      if (!response.ok) {
-        const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-        throw new Error(problem?.detail ?? "We couldn't start your plan. Please try again.");
-      }
-      const result = (await response.json()) as { public_id: string };
-      router.push(`/plan/?session=${encodeURIComponent(result.public_id)}`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Something went wrong.");
-      setSubmitting(false);
-    }
+      const result = await request<{ public_session_id: string }>("/api/sessions", { method: "POST", headers: { "X-Submission-Token": attempt.current.token }, body: JSON.stringify({ submission_id: attempt.current.id, ...JSON.parse(content) }) });
+      if (result) router.push(`/plan/?session=${result.public_session_id}`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Please retry."); }
+    finally { setBusy(false); }
   }
-
-  return (
-    <form className="planner-card" onSubmit={submit}>
-      <div className="form-heading">
-        <span className="step-number">01</span>
-        <div>
-          <p className="eyebrow">Build your trip brief</p>
-          <h2>Which away days are calling?</h2>
-        </div>
-      </div>
-
-      <fieldset className="form-section fixture-fieldset">
-        <legend>
-          Away fixtures <span>{selectedLabel}</span>
-        </legend>
-        <div className="fixture-grid">
-          {FIXTURES.map((fixture) => {
-            const active = selected.includes(fixture.id);
-            return (
-              <label className={`fixture-option ${active ? "selected" : ""}`} key={fixture.id}>
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggleFixture(fixture.id)}
-                />
-                <span className="check-mark" aria-hidden="true">
-                  {active ? "✓" : ""}
-                </span>
-                <strong>{fixture.opponent}</strong>
-                <span>{fixture.destination}</span>
-                <small>
-                  {fixture.date} · {fixture.kickoff}
-                </small>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      <div className="field-grid">
-        <label className="field">
-          <span>Starting from</span>
-          <input
-            required
-            value={origin}
-            onChange={(event) => setOrigin(event.target.value)}
-            placeholder="Town, city, airport or station"
-            autoComplete="address-level2"
-          />
-        </label>
-        <label className="field">
-          <span>Travel flexibility</span>
-          <select value={flexibility} onChange={(event) => setFlexibility(Number(event.target.value))}>
-            <option value={0}>Exact dates</option>
-            <option value={1}>A day either side</option>
-            <option value={2}>Two days either side</option>
-            <option value={3}>Three days either side</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="traveller-panel">
-        <span className="field-label">Who&apos;s travelling?</span>
-        <Counter label="Adults" value={adults} min={1} max={8} setValue={setAdults} />
-        <Counter label="Children" value={children} min={0} max={6} setValue={updateChildren} />
-        {children > 0 && (
-          <div className="age-grid">
-            {childAges.map((age, index) => (
-              <label key={index}>
-                Child {index + 1} age
-                <select
-                  value={age}
-                  onChange={(event) =>
-                    setChildAges((current) =>
-                      current.map((currentAge, ageIndex) =>
-                        ageIndex === index ? Number(event.target.value) : currentAge,
-                      ),
-                    )
-                  }
-                >
-                  {Array.from({ length: 18 }, (_, childAge) => (
-                    <option value={childAge} key={childAge}>
-                      {childAge}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        )}
-        <details className="room-details">
-          <summary>Room preference</summary>
-          <Counter label="Rooms" value={rooms} min={1} max={4} setValue={setRooms} />
-        </details>
-      </div>
-
-      <fieldset className="form-section budget-fieldset">
-        <legend>
-          Travel style <span>This changes how we search and rank—not a price guarantee.</span>
-        </legend>
-        <div className="budget-grid">
-          {BUDGETS.map((option) => (
-            <label className={`budget-option ${budget === option.id ? "selected" : ""}`} key={option.id}>
-              <input
-                type="radio"
-                name="budget"
-                value={option.id}
-                checked={budget === option.id}
-                onChange={() => setBudget(option.id)}
-              />
-              <span className="budget-symbol">{option.symbol}</span>
-              <strong>{option.title}</strong>
-              <small>{option.detail}</small>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <label className="field email-field">
-        <span>Email address</span>
-        <input
-          required
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
-          autoComplete="email"
-        />
-        <small>We&apos;ll use this address to send this itinerary once. No account. No marketing.</small>
-      </label>
-
-      <label className="field">
-        <span>
-          Extra instructions <em>optional</em>
-        </span>
-        <textarea
-          value={instructions}
-          onChange={(event) => setInstructions(event.target.value)}
-          placeholder="No overnight coaches, step-free stations, must be home Friday by 18:00, or no shared rooms…"
-          rows={3}
-          maxLength={2000}
-        />
-      </label>
-
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      <button className="primary-button" type="submit" disabled={submitting}>
-        {submitting ? "Starting your planner…" : "Plan my away days"}
-        <span aria-hidden="true">→</span>
-      </button>
-      <p className="submit-note">No payment or booking. We&apos;ll link you out when you&apos;re ready.</p>
-    </form>
-  );
-}
-
-function Counter({
-  label,
-  value,
-  min,
-  max,
-  setValue,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  setValue: (value: number) => void;
-}) {
-  return (
-    <div className="counter">
-      <span>{label}</span>
-      <div>
-        <button type="button" onClick={() => setValue(Math.max(min, value - 1))} disabled={value <= min}>
-          <span className="sr-only">Remove one {label.toLowerCase()}</span>−
-        </button>
-        <output aria-live="polite">{value}</output>
-        <button type="button" onClick={() => setValue(Math.min(max, value + 1))} disabled={value >= max}>
-          <span className="sr-only">Add one {label.toLowerCase()}</span>+
-        </button>
-      </div>
-    </div>
-  );
+  return <form className="brief panel" onSubmit={submit}>
+    {sample && <div className="notice">Development preview · Synthetic trips and prices · No email is sent</div>}
+    <div className="section-heading"><span className="eyebrow">YOUR TRIP BRIEF</span><span className="tag">From London</span></div>
+    <h2>Where are we going?</h2>{!sample && <p className="fine">Live Lyon preview · Adults sharing one room. Other fixtures and group shapes are coming later.</p>}
+    <fieldset disabled={busy}><legend>Choose your away matches</legend><div className="fixtures">{fixtures.map(f => <label key={f.id} className={`fixture ${selected.includes(f.id) ? "selected" : ""}`}><input type="checkbox" checked={selected.includes(f.id)} onChange={e => setSelected(e.target.checked ? [...selected, f.id] : selected.filter(id => id !== f.id))} /><span><strong>{f.opponent}</strong><small>{f.city} · {new Date(f.kickoff_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })}</small></span><span aria-hidden="true">↗</span></label>)}</div>
+    <div className="grid-two"><label>Adults<input type="number" min="1" max="8" value={adults} onChange={e => setAdults(Number(e.target.value))} required /></label><label>Rooms<input name="rooms" type="number" min="1" max={sample ? 4 : 1} defaultValue="1" required /></label></div>
+    <label>Children<select disabled={!sample} value={children.length} onChange={e => setChildren(Array.from({ length: Number(e.target.value) }, (_, i) => children[i] ?? 8))}>{Array.from({ length: 7 }, (_, i) => <option key={i} value={i}>{i}</option>)}</select></label>
+    {!!children.length && <div className="grid-two">{children.map((age, i) => <label key={i}>Child {i + 1} age<input type="number" min="0" max="17" value={age} onChange={e => setChildren(children.map((a, n) => n === i ? Number(e.target.value) : a))} /></label>)}</div>}
+    <label>Time around the match<select name="flexibility" defaultValue="day_either_side"><option value="day_either_side">A day either side</option><option value="two_days">Up to two days either side</option><option value="tight">A short trip</option></select></label>
+    <details><summary>Set travel dates</summary><p className="fine">Dates are measured in London time. Enter both dates for each match; otherwise we use your flexibility setting.</p>{fixtures.filter(f => selected.includes(f.id)).map(f => <fieldset key={f.id}><legend>{f.opponent}</legend><div className="grid-two"><label>Earliest departure<input type="date" name={`start-${f.id}`} /></label><label>Latest return<input type="date" name={`end-${f.id}`} /></label></div></fieldset>)}</details>
+    <label>Travel by<select name="transport" defaultValue=""><option value="">Compare flights and trains</option><option value="flight">Flights</option><option value="rail">Trains</option></select></label>
+    <label><input type="checkbox" name="private_room" /> Private room required</label>
+    <label><input type="checkbox" name="private_bathroom" /> Private bathroom required</label>
+    <fieldset className="budget"><legend>Your travel style</legend>{([ ["budget", "£", "Keep it cheap", "Dorms and shared bathrooms can be included"], ["value", "££", "Best value", "Balance price, comfort and journey time"], ["comfort", "£££", "Comfort first", "Fewer changes and more comfortable stays"] ] as const).map(([value, price, title, help]) => <label key={value} className={budget === value ? "selected" : ""}><input type="radio" name="budget" value={value} checked={budget === value} onChange={() => setBudget(value)} /><b>{price}</b><span>{title}<small>{help}</small></span></label>)}</fieldset>
+    <label>Email your itinerary<input name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></label><p className="fine">We’ll use this address to send this itinerary once. No account and no marketing.</p>
+    <label>Anything else? <span className="muted">Optional</span><textarea name="instructions" maxLength={2000} rows={3} placeholder="Gatwick preferred, no shared rooms…" /></label>
+    <p className="fine">Choose from Heathrow, Gatwick, Stansted, Luton and supported St Pancras routes. Travel to your London hub is outside the plan.</p>
+    {error && <p className="error" role="alert">{error}</p>}
+    <button className="primary" disabled={busy || !selected.length}>{busy ? "Starting your session…" : "Plan my away days →"}</button></fieldset>
+  </form>;
 }

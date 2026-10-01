@@ -1,106 +1,91 @@
-"""Transactional itinerary rendering and delivery."""
+"""Pure escaped email rendering of a frozen revision; no research dependencies."""
 
-from __future__ import annotations
+from html import escape
 
-import asyncio
-import html
-from datetime import UTC, datetime
-
-import resend
-
-from cpfc_trip.config import get_settings
-from cpfc_trip.domain import EmailActivityInput, EmailActivityResult, MatchEvent, Stay, TransportLeg
-from cpfc_trip.persistence.repository import (
-    create_delivery,
-    find_delivery,
-    get_contact_email,
-)
+from cpfc_trip.domain import Leg, Snapshot, Stay
+from cpfc_trip.planner.links import safe_url
 
 
-async def deliver_itinerary(input: EmailActivityInput) -> EmailActivityResult:
-    settings = get_settings()
-    key = f"final-itinerary/{input.public_id}/{input.itinerary.revision}"
-    existing = await find_delivery(key)
-    if existing and existing.provider_message_id:
-        return EmailActivityResult(provider_message_id=existing.provider_message_id)
-
-    recipient = await get_contact_email(input.contact_id)
-    subject = "Your Crystal Palace away-day itinerary"
-    rendered = render_itinerary_email(input)
-    if settings.email_mode == "preview":
-        provider_id = f"preview-{input.public_id}-{input.itinerary.revision}"
-    else:
-        resend.api_key = settings.resend_api_key
-        response = await asyncio.to_thread(
-            resend.Emails.send,
-            {
-                "from": settings.resend_from_email,
-                "to": [recipient],
-                "subject": subject,
-                "html": rendered,
-            },
-            {"idempotency_key": key},
-        )
-        provider_id = str(response["id"])
-
-    await create_delivery(
-        idempotency_key=key,
-        public_id=input.public_id,
-        contact_id=input.contact_id,
-        itinerary_revision=input.itinerary.revision,
-        subject=subject,
-        preview_html=rendered,
-        status="sent",
-        provider_message_id=provider_id,
+def render(snapshot: Snapshot) -> dict[str, str]:
+    title = (
+        "Eagles Away · Your Palace itinerary"
+        if snapshot.itinerary
+        else "Eagles Away · An update on your Palace trip"
     )
-    return EmailActivityResult(provider_message_id=provider_id)
-
-
-def render_itinerary_email(input: EmailActivityInput) -> str:
-    itinerary = input.itinerary
-    trip_sections: list[str] = []
-    for trip in itinerary.trips:
-        items: list[str] = []
-        for item in trip.items:
-            if isinstance(item, TransportLeg):
-                detail = (
-                    f"{item.mode.title()}: {item.origin_name} → {item.destination_name}<br>"
-                    f"{item.departs_at:%a %d %b, %H:%M %Z} - {item.arrives_at:%H:%M %Z}"
-                )
-            elif isinstance(item, Stay):
-                detail = (
-                    f"Stay: {item.property_name}<br>{item.check_in:%d %b} - {item.check_out:%d %b}"
-                )
-            elif isinstance(item, MatchEvent):
-                kickoff = item.fixture.kickoff_at.astimezone(
-                    __import__("zoneinfo", fromlist=["ZoneInfo"]).ZoneInfo(
-                        item.fixture.venue.city.timezone
-                    )
-                )
-                detail = (
-                    f"Match: {item.fixture.home_team_name} v Crystal Palace<br>"
-                    f"{kickoff:%a %d %b, %H:%M %Z} · Match ticket not included"
-                )
-            else:  # pragma: no cover - discriminated union exhaustiveness
-                continue
-            escaped_detail = html.escape(detail).replace("&lt;br&gt;", "<br>")
-            items.append(f'<li style="margin:0 0 14px;color:#18233b">{escaped_detail}</li>')
-        trip_sections.append(
-            f'<section style="background:#fff;border-radius:16px;padding:20px;margin:0 0 18px">'
-            f'<h2 style="margin:0 0 14px;color:#1b3f92">{html.escape(trip.title)}</h2>'
-            f'<ul style="padding-left:20px;margin:0">{"".join(items)}</ul></section>'
+    text = [title, "Supported by Temporal", ""]
+    if not snapshot.itinerary:
+        text.append(
+            "We couldn't verify a useful itinerary within this session. No travel has been booked."
         )
-    sent_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
-    return f"""<!doctype html>
-<html><body style="margin:0;background:#f2f5fa;font-family:Arial,sans-serif">
-<main style="max-width:640px;margin:auto;padding:28px 16px">
-<p style="font-weight:700;color:#e21d3c">CRYSTAL PALACE AWAY DAYS</p>
-<h1 style="color:#172642">{html.escape(itinerary.title)}</h1>
-<p style="color:#52617a;line-height:1.5">{html.escape(itinerary.summary)}</p>
-{"".join(trip_sections)}
-<p style="color:#52617a;font-size:13px;line-height:1.5">Prices and availability can change.
-Recheck every fare and booking condition before paying. This planner does not sell travel and
-match tickets are not included.</p>
-<p style="color:#52617a;font-size:13px">Sent {sent_at}. Sponsored by Temporal in partnership
-with Crystal Palace Football Club.</p>
-</main></body></html>"""
+    else:
+        text.extend(snapshot.itinerary.caveats)
+        for trip in snapshot.itinerary.trips:
+            text += [
+                "",
+                f"Palace away at {trip.fixture.opponent}",
+                f"Kickoff: {trip.fixture.kickoff_at.isoformat()} (UTC)",
+                trip.summary,
+            ]
+            items = list(trip.journey.outbound + trip.journey.inbound) if trip.journey else []
+            for leg in items:
+                text.append(
+                    f"{leg.origin} → {leg.destination}: {leg.departs_at.isoformat()} – "
+                    f"{leg.arrives_at.isoformat()} · {leg.operator} {leg.service_number}"
+                )
+            priced: list[Leg | Stay] = [*items, *([trip.stay] if trip.stay else [])]
+            if trip.stay:
+                s = trip.stay
+                text.append(
+                    f"{s.property_name} · {s.room_description} · {s.check_in} to {s.check_out}"
+                )
+            for item in priced:
+                q = item.quote
+                if q:
+                    text.append(
+                        f"Observed {q.amount.currency} {q.amount.minor_units / 100:.2f} "
+                        f"per {q.unit}, {q.scope}; checked {q.observed_at.isoformat()}. "
+                        f"Taxes {q.taxes}. {' '.join(q.caveats)}"
+                    )
+                    if q.additional_taxes:
+                        text.append(
+                            f"Additional taxes: {q.additional_taxes.currency} "
+                            f"{q.additional_taxes.minor_units / 100:.2f}"
+                        )
+                else:
+                    text.append("Price unavailable — check current fare.")
+                if item.offer.booking_url and safe_url(item.offer.booking_url):
+                    text.append(item.offer.booking_url)
+            for transfer in trip.transfers:
+                text += [
+                    transfer.title,
+                    transfer.description,
+                    transfer.source_url,
+                    f"Transfer guidance reviewed {transfer.reviewed_at.isoformat()}; fares excluded.",
+                ]
+            text.extend(trip.gaps)
+            if trip.known_total:
+                text.append(
+                    f"Known subtotal: {trip.known_total.currency} "
+                    f"{trip.known_total.minor_units / 100:.2f}; incomplete price coverage."
+                )
+    text += [
+        "",
+        "Prices may have changed. Confirm every detail on the travel provider's site.",
+        "No match tickets, bookings, or travel to/from the London departure hub are included.",
+    ]
+    lines = []
+    for line in text:
+        if safe_url(line):
+            lines.append(f'<p><a href="{escape(line, quote=True)}">View on travel provider</a></p>')
+        else:
+            lines.append(f"<p>{escape(line)}</p>")
+    return dict(
+        subject=title,
+        text="\n".join(text),
+        html=(
+            '<!doctype html><html lang="en"><body style="font:16px/1.5 Arial,sans-serif;'
+            'color:#152039;max-width:640px;margin:auto;padding:24px">'
+            + "".join(lines)
+            + "</body></html>"
+        ),
+    )

@@ -1,131 +1,91 @@
-"""Small persistence boundary for access and email data."""
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+import hashlib
+import hmac
+import json
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from cryptography.fernet import Fernet
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from cpfc_trip.persistence.database import session_factory
-from cpfc_trip.persistence.models import ContactRow, EmailDeliveryRow, SessionRow
-
-
-@dataclass(frozen=True)
-class StoredSession:
-    public_id: UUID
-    workflow_id: str
-    request_id: UUID
-    contact_id: UUID
-    access_token_hash: str
+from cpfc_trip.catalog import load_catalog, validate_brief
+from cpfc_trip.config import Settings
+from cpfc_trip.domain import CreateSession, Limits, SessionInput
+from cpfc_trip.persistence.models import SessionRow
 
 
-async def find_session_by_request(request_id: UUID) -> StoredSession | None:
-    async with session_factory()() as db:
-        row = await db.scalar(select(SessionRow).where(SessionRow.request_id == str(request_id)))
-        return _stored_session(row) if row else None
+def digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
-async def find_session(public_id: UUID) -> StoredSession | None:
-    async with session_factory()() as db:
-        row = await db.get(SessionRow, str(public_id))
-        return _stored_session(row) if row else None
+class Repository:
+    def __init__(self, engine: AsyncEngine, settings: Settings):
+        self.sessions = async_sessionmaker(engine, expire_on_commit=False)
+        self.settings = settings
+        self.cipher = Fernet(settings.contact_encryption_key.get_secret_value().encode())
 
-
-async def create_session(
-    *, request_id: UUID, email: str, public_id: UUID, token_hash: str
-) -> StoredSession:
-    now = datetime.now(UTC)
-    contact_id = uuid4()
-    workflow_id = f"travel-session/{public_id}"
-    async with session_factory()() as db:
-        db.add(
-            ContactRow(
-                id=str(contact_id),
-                email=email,
-                created_at=now,
-                expires_at=now + timedelta(days=30),
+    async def create(self, request: CreateSession, token: str) -> SessionInput:
+        fingerprint = digest(request.model_dump_json())
+        async with self.sessions() as db:
+            old = await db.scalar(
+                select(SessionRow).where(SessionRow.submission_id == str(request.submission_id))
             )
-        )
-        db.add(
-            SessionRow(
-                public_id=str(public_id),
-                workflow_id=workflow_id,
-                request_id=str(request_id),
-                contact_id=str(contact_id),
-                access_token_hash=token_hash,
-                created_at=now,
+            if old:
+                if old.deleted_at or not hmac.compare_digest(old.access_hash, digest(token)):
+                    raise PermissionError("Submission is not accessible")
+                if old.request_hash != fingerprint:
+                    raise ValueError("Submission ID was already used with a different brief")
+                return SessionInput.model_validate(old.workflow_input)
+            fixtures, routes = load_catalog()
+            brief = validate_brief(request.brief, fixtures, datetime.now(UTC))
+            if self.settings.planner_mode == "live":
+                enabled = {r.fixture_id for r in routes if r.enabled}
+                if not set(brief.fixture_ids) <= enabled:
+                    raise ValueError("Live planning is not yet enabled for this fixture")
+                if brief.travellers.child_ages or brief.travellers.rooms != 1:
+                    raise ValueError(
+                        "The live Lyon preview currently supports adults sharing one room. Child and multi-room pricing are still being validated."
+                    )
+            sid = uuid4()
+            data = SessionInput(
+                public_session_id=sid,
+                contact_id=sid,
+                brief=brief,
+                fixtures=tuple(f for f in fixtures if f.id in brief.fixture_ids),
+                routes=tuple(r for r in routes if r.fixture_id in brief.fixture_ids),
+                planner_mode=self.settings.planner_mode,
+                limits=Limits(inactivity_seconds=self.settings.inactivity_timeout_seconds),
             )
-        )
-        await db.commit()
-    return StoredSession(public_id, workflow_id, request_id, contact_id, token_hash)
+            email = str(request.email)
+            db.add(
+                SessionRow(
+                    id=str(sid),
+                    submission_id=str(request.submission_id),
+                    request_hash=fingerprint,
+                    access_hash=digest(token),
+                    email_hash=hmac.new(
+                        self.settings.session_secret.get_secret_value().encode(),
+                        email.casefold().encode(),
+                        "sha256",
+                    ).hexdigest(),
+                    encrypted_email=self.cipher.encrypt(email.encode()),
+                    created_at=datetime.now(UTC),
+                    workflow_input=json.loads(data.model_dump_json()),
+                )
+            )
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                return await self.create(request, token)
+            return data
 
-
-async def get_contact_email(contact_id: UUID) -> str:
-    async with session_factory()() as db:
-        row = await db.get(ContactRow, str(contact_id))
-        if row is None:
-            raise LookupError(f"contact not found: {contact_id}")
-        return row.email
-
-
-async def find_delivery(idempotency_key: str) -> EmailDeliveryRow | None:
-    async with session_factory()() as db:
-        row: EmailDeliveryRow | None = await db.scalar(
-            select(EmailDeliveryRow).where(EmailDeliveryRow.idempotency_key == idempotency_key)
-        )
-        return row
-
-
-async def create_delivery(
-    *,
-    idempotency_key: str,
-    public_id: UUID,
-    contact_id: UUID,
-    itinerary_revision: int,
-    subject: str,
-    preview_html: str,
-    status: str,
-    provider_message_id: str | None,
-) -> EmailDeliveryRow:
-    now = datetime.now(UTC)
-    row = EmailDeliveryRow(
-        id=str(uuid4()),
-        idempotency_key=idempotency_key,
-        public_id=str(public_id),
-        contact_id=str(contact_id),
-        itinerary_revision=itinerary_revision,
-        status=status,
-        provider_message_id=provider_message_id,
-        subject=subject,
-        preview_html=preview_html,
-        created_at=now,
-        sent_at=now if status == "sent" else None,
-    )
-    async with session_factory()() as db:
-        db.add(row)
-        await db.commit()
-        await db.refresh(row)
-    return row
-
-
-async def latest_delivery(public_id: UUID) -> EmailDeliveryRow | None:
-    async with session_factory()() as db:
-        row: EmailDeliveryRow | None = await db.scalar(
-            select(EmailDeliveryRow)
-            .where(EmailDeliveryRow.public_id == str(public_id))
-            .order_by(EmailDeliveryRow.created_at.desc())
-            .limit(1)
-        )
-        return row
-
-
-def _stored_session(row: SessionRow) -> StoredSession:
-    return StoredSession(
-        public_id=UUID(row.public_id),
-        workflow_id=row.workflow_id,
-        request_id=UUID(row.request_id),
-        contact_id=UUID(row.contact_id),
-        access_token_hash=row.access_token_hash,
-    )
+    async def authorize(self, sid: UUID, token: str) -> bool:
+        async with self.sessions() as db:
+            row = await db.get(SessionRow, str(sid))
+            return bool(
+                row
+                and row.deleted_at is None
+                and hmac.compare_digest(row.access_hash, digest(token))
+            )
