@@ -23,6 +23,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 Arial, Helvetica, sans-serif; }
+.arrow { font-family: var(--font-inter), Arial, sans-serif; }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { touch-action: manipulation; }
 button { cursor: pointer; }
@@ -91,6 +92,9 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 legend { margin-bottom: 9px; font-size: 14px; font-weight: 700; }
 label { display: block; margin: 16px 0 6px; font-size: 14px; font-weight: 700; }
 input:not([type="checkbox"]):not([type="radio"]), select, textarea { display: block; width: 100%; min-height: 46px; margin-top: 7px; padding: 11px 12px; border: 1px solid #aeb9c8; border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 16px; }
+.select-wrap { position: relative; display: block; margin-top: 7px; }
+.select-wrap select { appearance: none; margin-top: 0; padding-inline: 16px 48px; }
+.select-chevron { position: absolute; top: 50%; right: 16px; transform: translateY(-58%); color: var(--ink); font: 600 24px/1 var(--font-inter), Arial, sans-serif; pointer-events: none; }
 textarea { resize: vertical; }
 input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-color: var(--blue); }
 .fixtures { display: grid; gap: 9px; }

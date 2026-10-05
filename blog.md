@@ -1,5 +1,10 @@
 # Development notes
 
+## 5 October 2026 — arrow font and select spacing
+
+- Self-hosted Inter through Next font and scoped it to directional arrow glyphs; body copy retains its existing font. Replaced native select carets with decorative Inter chevrons and used one shared select wrapper with 16px left padding, 48px right padding, and a 16px caret inset. The decorative chevrons are hidden from accessibility labels.
+- Desktop browser inspection confirmed the arrow and caret resolve to Inter and the dropdown labels remain unchanged. At a 390px viewport, the page width remained 390px with no horizontal overflow. The full `scripts/check.sh` gate passed: 64 Python tests, two PostgreSQL tests skipped without a configured test database, 18 frontend tests, Ruff, mypy, API schema comparison, TypeScript, ESLint and static build.
+
 ## 5 October 2026 — single-match live coverage
 
 - Changed the form to select exactly one of the four supplied Europa League away matches. Kept the stored Brief model compatible with older multi-match Temporal sessions. The catalog now records the supplied opponent, venue and location labels; venues remain provisional. Enabled direct-flight searches to Istanbul (IST) and Salzburg (SZG), and a Warsaw (WAW) flight joined to direct Warsaw Central–Zielone Wzgórza trains for Białystok. Existing Lyon flight/rail coverage remains enabled; unreviewed SAW and MUC connections remain disabled.
