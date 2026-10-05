@@ -72,6 +72,7 @@ class Fixture(Record):
     timezone: str
     kickoff_at: AwareDatetime
     venue: str
+    venue_location: str = ""
     venue_status: Literal["provisional", "confirmed"] = "provisional"
     source_url: str
     source_checked_at: AwareDatetime
@@ -124,7 +125,7 @@ class SessionInput(Record):
     routes: tuple[Route, ...]
     limits: Limits = Limits()
     planner_mode: Literal["live", "recorded"] = "live"
-    catalog_version: str = "2026-09-06.1"
+    catalog_version: str = "2026-10-05.away.1"
 
 
 class Money(Record):

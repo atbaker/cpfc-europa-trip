@@ -1,11 +1,12 @@
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
 
+from cpfc_trip.catalog import load_catalog
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import Party, SearchSpec
 from cpfc_trip.origins import routes_for_origin
@@ -14,10 +15,12 @@ from cpfc_trip.planner.prices import total
 from cpfc_trip.planner.providers.searchapi import (
     ProviderError,
     SearchApi,
+    connect_onward_rail,
     normalize_flights,
     normalize_stay,
     normalize_trains,
 )
+from cpfc_trip.planner.recorded import sample
 
 CHECKED = datetime(2026, 9, 6, tzinfo=UTC)
 
@@ -99,6 +102,89 @@ def test_rail_date_party_currency_are_not_guessed():
     assert total([legs[0].quote], Party(adults=2))[0] is None
     assert not normalize_trains(raw, "London", "Paris", "2026-10-05", CHECKED)
     assert not normalize_trains(raw, "Paris", "London", "2026-10-04", CHECKED)
+
+
+def test_warsaw_onward_rail_needs_reviewed_stations_and_airport_transfer(session_input):
+    fixtures, routes = load_catalog()
+    route = next(route for route in routes if route.id == "london-waw")
+    fixture = next(fixture for fixture in fixtures if fixture.id == route.fixture_id)
+    chosen = spec(session_input).model_copy(
+        update={
+            "fixture": fixture,
+            "route": route,
+            "outbound_date": date(2026, 12, 9),
+            "return_date": date(2026, 12, 11),
+        }
+    )
+    flight = sample(chosen, "flight").journeys[0]
+
+    def train(origin, destination, day, departure, arrival, start_station, end_station):
+        return {
+            "train_results": {
+                "origin": origin,
+                "destination": destination,
+                "date": day,
+                "trains": [
+                    {
+                        "transfers": 0,
+                        "time_window": {"depart_at_iso": departure, "arrive_at_iso": arrival},
+                        "instructions": [
+                            {
+                                "depart_from": {"place": start_station, "at_iso": departure},
+                                "arrive_at": {"place": end_station, "at_iso": arrival},
+                                "service_provider": {
+                                    "name": "PKP Intercity",
+                                    "website": "https://www.intercity.pl/pl/",
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+
+    outward = normalize_trains(
+        train(
+            "Warsaw",
+            "Białystok",
+            "2026-12-09",
+            "2026-12-09T15:00:00+01:00",
+            "2026-12-09T17:30:00+01:00",
+            "Warsaw Central",
+            "Zielone Wzgórza",
+        ),
+        "Warsaw",
+        "Białystok",
+        "2026-12-09",
+        CHECKED,
+    )
+    inbound = normalize_trains(
+        train(
+            "Białystok",
+            "Warsaw",
+            "2026-12-11",
+            "2026-12-11T07:00:00+01:00",
+            "2026-12-11T10:00:00+01:00",
+            "Zielone Wzgórza",
+            "Warsaw Central",
+        ),
+        "Białystok",
+        "Warsaw",
+        "2026-12-11",
+        CHECKED,
+    )
+    assert outward and inbound
+    assert outward[0].quote is None and inbound[0].quote is None
+    assert "fare unavailable" in outward[0].caveats[0]
+    joined = connect_onward_rail(flight, outward, inbound, chosen.route.minimum_transfer_minutes)
+    assert joined and joined[0].outbound[-1].destination == "Zielone Wzgórza"
+    assert len(joined[0].outbound) == len(joined[0].inbound) == 2
+    too_close = outward[0].model_copy(
+        update={"departs_at": flight.outbound[-1].arrives_at + timedelta(hours=1)}
+    )
+    assert not connect_onward_rail(
+        flight, (too_close,), inbound, chosen.route.minimum_transfer_minutes
+    )
 
 
 @pytest.mark.parametrize(

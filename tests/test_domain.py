@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from cpfc_trip.catalog import load_catalog
 from cpfc_trip.domain import Brief, Party
 from cpfc_trip.origins import airports_for, routes_for_origin
 from cpfc_trip.planner.agent import Intent
@@ -63,6 +64,26 @@ def test_party_bound(adults):
 def test_duplicate_fixture_rejected():
     with pytest.raises(ValidationError):
         Brief(fixture_ids=("same", "same"))
+
+
+def test_trip_brief_keeps_legacy_multi_match_sessions_readable():
+    assert Brief(fixture_ids=("uel-2026-lyon-away",)).fixture_ids == ("uel-2026-lyon-away",)
+    assert len(Brief(fixture_ids=("uel-2026-lyon-away", "uel-2026-besiktas-away")).fixture_ids) == 2
+
+
+def test_all_four_away_matches_have_enabled_live_routes():
+    fixtures, routes = load_catalog()
+    assert {fixture.id for fixture in fixtures} == {
+        route.fixture_id for route in routes if route.enabled
+    }
+    assert {route.id for route in routes if route.enabled} == {
+        "london-lys",
+        "london-paris-lyon",
+        "london-ist",
+        "london-waw",
+        "london-szg",
+    }
+    assert all(fixture.venue_location for fixture in fixtures)
 
 
 def test_uk_departure_city_resolves_without_guessing(session_input):

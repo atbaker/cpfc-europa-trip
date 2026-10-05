@@ -1,5 +1,11 @@
 # Development notes
 
+## 5 October 2026 — single-match live coverage
+
+- Changed the form to select exactly one of the four supplied Europa League away matches. Kept the stored Brief model compatible with older multi-match Temporal sessions. The catalog now records the supplied opponent, venue and location labels; venues remain provisional. Enabled direct-flight searches to Istanbul (IST) and Salzburg (SZG), and a Warsaw (WAW) flight joined to direct Warsaw Central–Zielone Wzgórza trains for Białystok. Existing Lyon flight/rail coverage remains enabled; unreviewed SAW and MUC connections remain disabled.
+- A live provider check found round-trip flights for Istanbul (21–23 October), Warsaw (9–11 December) and Salzburg (27–29 January). The first ranked Warsaw flight arrived too late for the onward train, so the adapter selects the earliest arriving outbound and latest departing return before joining dated trains with a three-hour airport/station buffer. A repeated live Warsaw search returned one two-leg journey each way in five provider requests. The provider returned train schedules but no train fares or selected-service booking links; these remain unpriced with an operator link. Airport/station and stadium transfers are also unpriced. Availability and payable fares can change.
+- Live dated Booking.com searches returned two accommodation results each in Istanbul, Białystok and Salzburg. These are search snapshots, not booking confirmations; location, room and final total need user review. The full local gate passed after the implementation: 64 Python tests, two PostgreSQL tests skipped without a configured test database, 18 frontend tests, Ruff, mypy, API schema comparison, TypeScript, ESLint and static build. The browser displayed four radio choices at desktop width; a 390px check found no horizontal overflow. The local Temporal server, API, worker and frontend were restarted. A full new three-fixture Temporal session was not run.
+
 ## 5 October 2026 — UK departure cities and connected rail
 
 - Replaced the fixed London origin with a dropdown of 18 supported UK airport cities; London remains selected by default. The chosen city is validated server side, frozen with the session routes and shown in plan progress, the saved snapshot and email caveats. Unrecognised cities fail before a paid search.

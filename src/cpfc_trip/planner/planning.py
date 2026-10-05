@@ -92,7 +92,7 @@ def feasible(
             < route.gateway_departure_hours[1]
         ):
             return False
-        if route.mode == "rail" and any(
+        if (route.mode == "rail" or route.onward_stations) and any(
             b.departs_at - a.arrives_at < timedelta(minutes=route.minimum_transfer_minutes)
             for direction in (outbound, inbound)
             for a, b in zip(direction, direction[1:], strict=False)
@@ -191,7 +191,11 @@ def choose(
         route.transfer_note,
         "Confirm late check-in and post-match access to the accommodation.",
     ]
-    if route.onward_stations and route.mode != "rail":
+    if (
+        route.onward_stations
+        and route.mode != "rail"
+        and all(leg.mode != "rail" for leg in journey.outbound)
+    ):
         # Never label an airport-only journey as a complete trip to an onward destination.
         gaps.append("Onward rail has not been verified; this is an incomplete travel option.")
     if fixture.venue_status != "confirmed":

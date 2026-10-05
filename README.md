@@ -1,7 +1,7 @@
 # Eagles Away
 
 A UK departure-city travel planner for Crystal Palace supporters, supported by Temporal.
-**A local, live UK flight → Lyon vertical slice is implemented, with rail from London and eight reviewed UK rail cities. The public MVP is not complete or deployed.**
+**Local live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have direct-flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete or deployed.**
 Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md) for completed work,
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 

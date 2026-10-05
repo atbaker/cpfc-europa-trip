@@ -51,7 +51,7 @@ class Repository:
                     raise ValueError("Live planning is not yet enabled for this fixture")
                 if brief.travellers.child_ages or brief.travellers.rooms != 1:
                     raise ValueError(
-                        "The live Lyon preview currently supports adults sharing one room. Child and multi-room pricing are still being validated."
+                        "Live planning currently supports adults sharing one room. Child and multi-room pricing are still being validated."
                     )
             sid = uuid4()
             data = SessionInput(
@@ -60,6 +60,9 @@ class Repository:
                 brief=brief,
                 fixtures=tuple(f for f in fixtures if f.id in brief.fixture_ids),
                 routes=tuple(r for r in routes if r.fixture_id in brief.fixture_ids),
+                catalog_version=next(
+                    f.catalog_version for f in fixtures if f.id in brief.fixture_ids
+                ),
                 planner_mode=self.settings.planner_mode,
                 limits=Limits(inactivity_seconds=self.settings.inactivity_timeout_seconds),
             )

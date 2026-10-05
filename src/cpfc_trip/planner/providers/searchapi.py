@@ -236,29 +236,87 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
             calls=api.calls,
             gaps=("No nonstop flights were found for this route and date pair.",),
         )
-    choices = initial.get("best_flights", []) + initial.get("other_flights", [])
+    onward = spec.route.onward_stations == ("Warsaw", "Białystok")
+    choices = [
+        item
+        for item in initial.get("best_flights", []) + initial.get("other_flights", [])
+        if item.get("departure_token")
+    ]
+    if onward:
+        # The provider's cheapest first choice can arrive after the last useful train.
+        choices.sort(
+            key=lambda x: (
+                (x.get("flights") or [{}])[-1].get("arrival_airport", {}).get("date", "9999"),
+                (x.get("flights") or [{}])[-1].get("arrival_airport", {}).get("time", "99:99"),
+            )
+        )
     journeys: list[Journey] = []
     for item in choices[:1]:
-        if not item.get("departure_token"):
-            continue
         try:
             returns = await api.get({**p, "departure_token": item["departure_token"]})
             back = returns.get("best_flights", []) + returns.get("other_flights", [])
             if not back:
                 back = returns.get("flights", [])
+            if onward:
+                back.sort(
+                    key=lambda x: (
+                        (x.get("flights") or [{}])[0].get("departure_airport", {}).get("date", ""),
+                        (x.get("flights") or [{}])[0].get("departure_airport", {}).get("time", ""),
+                    ),
+                    reverse=True,
+                )
             token = next((x.get("booking_token") for x in back if x.get("booking_token")), None)
             if not token:
                 continue
             selected = await api.get({**p, "booking_token": token})
             result = normalize_flights(selected, spec, datetime.now(UTC))
-            journeys.extend(result.journeys)
+            if onward and result.journeys:
+                outward, inbound = await asyncio.gather(
+                    api.get(
+                        {
+                            "engine": "google",
+                            "q": f"trains from Warsaw to Białystok on {spec.outbound_date:%d %B %Y}",
+                            "gl": "uk",
+                            "hl": "en",
+                        }
+                    ),
+                    api.get(
+                        {
+                            "engine": "google",
+                            "q": f"trains from Białystok to Warsaw on {spec.return_date:%d %B %Y}",
+                            "gl": "uk",
+                            "hl": "en",
+                        }
+                    ),
+                )
+                checked = datetime.now(UTC)
+                out_legs = normalize_trains(
+                    outward, "Warsaw", "Białystok", str(spec.outbound_date), checked
+                )
+                in_legs = normalize_trains(
+                    inbound, "Białystok", "Warsaw", str(spec.return_date), checked
+                )
+                for flight in result.journeys:
+                    journeys.extend(
+                        connect_onward_rail(
+                            flight, out_legs, in_legs, spec.route.minimum_transfer_minutes
+                        )
+                    )
+            else:
+                journeys.extend(result.journeys)
         except (ProviderError, KeyError, ValueError):
             # Preserve earlier complete flight offers when another choice fails.
             continue
     return SearchBatch(
         journeys=tuple(journeys),
         calls=api.calls,
-        gaps=() if journeys else ("No complete flight result was verified.",),
+        gaps=()
+        if journeys
+        else (
+            ("No complete flight and Warsaw–Białystok train connection was verified.",)
+            if onward
+            else ("No complete flight result was verified.",)
+        ),
     )
 
 
@@ -461,6 +519,8 @@ def normalize_trains(
             ("Paris", "London"): ("Gare du Nord", "St Pancras International"),
             ("Paris", "Lyon"): ("Gare de Lyon", "Lyon Part Dieu"),
             ("Lyon", "Paris"): ("Lyon Part Dieu", "Gare de Lyon"),
+            ("Warsaw", "Białystok"): ("Warsaw Central", "Zielone Wzgórza"),
+            ("Białystok", "Warsaw"): ("Zielone Wzgórza", "Warsaw Central"),
         }.get((origin, destination))
         for provider_city, departure_station, london_station in UK_RAIL.values():
             if (origin, destination) == (provider_city, "London"):
@@ -478,7 +538,12 @@ def normalize_trains(
             continue
         offers = train.get("buy_ticket", {}).get("offers", [])
         selected = next((x for x in offers if safe_url(x.get("link", ""))), None)
-        if not selected:
+        operator_url = instruction.get("service_provider", {}).get("website", "")
+        unpriced_warsaw = stations in {
+            ("Warsaw Central", "Zielone Wzgórza"),
+            ("Zielone Wzgórza", "Warsaw Central"),
+        } and safe_url(operator_url)
+        if not selected and not unpriced_warsaw:
             continue
         try:
             dep = datetime.fromisoformat(window["depart_at_iso"])
@@ -495,10 +560,16 @@ def normalize_trains(
                 "Google train results",
                 (origin, destination, day, str(dep)),
                 checked,
-                safe_url(selected["link"]),
-                selected.get("source"),
+                safe_url(selected["link"]) if selected else safe_url(operator_url),
+                selected.get("source")
+                if selected
+                else instruction.get("service_provider", {}).get("name"),
             )
-            amount = money(selected.get("extracted_price"), selected.get("currency", ""))
+            amount = (
+                money(selected.get("extracted_price"), selected.get("currency", ""))
+                if selected
+                else None
+            )
             quote = (
                 Quote(
                     id=ref.id,
@@ -527,13 +598,59 @@ def normalize_trains(
                     offer=ref,
                     quote=quote,
                     caveats=(
-                        "Direct service with station and time evidence. Confirm the selected fare and passengers.",
+                        "Direct service with station and time evidence. Confirm the selected fare and passengers."
+                        if selected
+                        else "Dated train time found; fare unavailable. Choose and confirm this train with the operator.",
                     ),
                 )
             )
         except (KeyError, ValueError, ValidationError):
             continue
     return tuple(legs)
+
+
+def connect_onward_rail(
+    flight: Journey, outward: tuple[Leg, ...], inbound: tuple[Leg, ...], minutes: int
+) -> tuple[Journey, ...]:
+    """Join a WAW flight to reviewed direct trains, leaving time to change stations."""
+    if flight.outbound[-1].destination != "WAW" or flight.inbound[0].origin != "WAW":
+        return ()
+    journeys = []
+    minimum = timedelta(minutes=minutes)
+    maximum = timedelta(hours=8)
+    for out in outward:
+        if (out.origin, out.destination) != ("Warsaw Central", "Zielone Wzgórza"):
+            continue
+        out_wait = out.departs_at - flight.outbound[-1].arrives_at
+        if not (
+            minimum <= out_wait <= maximum
+            and out.departs_at.date() == flight.outbound[-1].arrives_at.date()
+        ):
+            continue
+        for back in inbound:
+            if (back.origin, back.destination) != ("Zielone Wzgórza", "Warsaw Central"):
+                continue
+            back_wait = flight.inbound[0].departs_at - back.arrives_at
+            if not (
+                minimum <= back_wait <= maximum
+                and back.arrives_at.date() == flight.inbound[0].departs_at.date()
+            ):
+                continue
+            journeys.append(
+                Journey(
+                    id=fingerprint((flight.id, out.id, back.id)),
+                    route_id=flight.route_id,
+                    outbound=(*flight.outbound, out),
+                    inbound=(back, *flight.inbound),
+                )
+            )
+    journeys.sort(
+        key=lambda j: (
+            j.outbound[-1].arrives_at - j.outbound[0].departs_at,
+            j.inbound[-1].arrives_at - j.inbound[0].departs_at,
+        )
+    )
+    return tuple(journeys[:8])
 
 
 def connect_rail(

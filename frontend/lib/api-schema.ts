@@ -290,6 +290,11 @@ export interface components {
             /** Venue */
             venue: string;
             /**
+             * Venue Location
+             * @default
+             */
+            venue_location: string;
+            /**
              * Venue Status
              * @default provisional
              * @enum {string}
