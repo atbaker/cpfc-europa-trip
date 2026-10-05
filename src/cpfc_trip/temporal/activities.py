@@ -33,13 +33,11 @@ class SearchActivities:
         except (SQLAlchemyError, TimeoutError):
             logging.warning("Shared search cache read failed", exc_info=True)
         result = await acquire(spec, mode)
-        has_results = bool(result.stays if mode == "stay" else result.journeys)
-        if has_results:
-            try:
-                async with asyncio.timeout(1):
-                    await self.cache.put(spec, mode, result)
-            except (SQLAlchemyError, TimeoutError):
-                logging.warning("Shared search cache write failed", exc_info=True)
+        try:
+            async with asyncio.timeout(1):
+                await self.cache.put(spec, mode, result)
+        except (SQLAlchemyError, TimeoutError):
+            logging.warning("Shared search cache write failed", exc_info=True)
         return result
 
     @activity.defn(name="search_flights")

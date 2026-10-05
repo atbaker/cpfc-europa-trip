@@ -1,6 +1,7 @@
 """Pure enumeration, feasibility and ranking. No I/O and no invented commercial facts."""
 
 from datetime import timedelta
+from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from cpfc_trip.domain import (
@@ -95,7 +96,7 @@ def feasible(
         if (route.mode == "rail" or route.onward_stations) and any(
             b.departs_at - a.arrives_at < timedelta(minutes=route.minimum_transfer_minutes)
             for direction in (outbound, inbound)
-            for a, b in zip(direction, direction[1:], strict=False)
+            for a, b in pairwise(direction)
         ):
             return False
     if (
@@ -108,7 +109,7 @@ def feasible(
     if inbound[0].departs_at < fixture.kickoff_at + timedelta(hours=5):
         return False
     for direction in (outbound, inbound):
-        if any(b.departs_at < a.arrives_at for a, b in zip(direction, direction[1:], strict=False)):
+        if any(b.departs_at < a.arrives_at for a, b in pairwise(direction)):
             return False
     if (
         stay.check_in != outbound[-1].arrives_at.astimezone(ZoneInfo(fixture.timezone)).date()

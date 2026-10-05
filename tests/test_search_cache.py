@@ -42,7 +42,7 @@ def search_spec(data: SessionInput) -> SearchSpec:
     )
 
 
-async def test_transport_cache_is_shared_short_lived_and_party_safe(
+async def test_transport_cache_is_shared_for_24_hours_and_party_safe(
     cache_engine: AsyncEngine, session_input: SessionInput
 ) -> None:
     """Only the same route, dates, mode and travellers may reuse a journey."""

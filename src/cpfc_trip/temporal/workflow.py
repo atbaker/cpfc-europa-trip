@@ -7,6 +7,8 @@ from typing import Any
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
+    # Pydantic imports this lazily during validation; load it before sandbox activation.
+    import annotated_types as annotated_types
     from pydantic_ai.durable_exec.temporal import PydanticAIWorkflow
     from pydantic_ai.usage import UsageLimits
     from temporalio.common import RetryPolicy
@@ -400,9 +402,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
         except Exception as exc:
             # Deliberately omit raw provider/model errors and preserve the last committed plan.
             tid = command.id if command else self.data.public_session_id
-            if isinstance(exc, UnsupportedRequirements):
-                failure_message = str(exc)
-            elif isinstance(exc, NoCompleteTrip):
+            if isinstance(exc, (UnsupportedRequirements, NoCompleteTrip)):
                 failure_message = str(exc)
             elif isinstance(exc, PlanningServiceUnavailable):
                 failure_message = (

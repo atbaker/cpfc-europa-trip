@@ -89,10 +89,13 @@ after pulling this change.
 
 ## Enable live planning
 
-Only the reviewed Lyon destination route is enabled: direct flights from supported UK airport cities to LYS, plus rail through London and Paris from London, Birmingham, Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle,
-adults sharing one room. Children, multiple rooms and the other three fixture destinations
-remain unsupported in live mode. Venue and match-specific transfers still have outstanding
-checks. Quotes are retrieved planning estimates with missing costs explicitly disclosed.
+All four listed away matches have reviewed live search patterns. Lyon offers direct flights
+from supported UK airport cities and rail through London and Paris from London, Birmingham,
+Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle. Istanbul and
+Salzburg offer direct-flight searches; Białystok joins flights to Warsaw with dated direct
+trains. Live pricing currently supports adults sharing one room. Children and multiple rooms
+remain unsupported. Venue and match-specific transfers still need checks; quotes are planning
+estimates with missing costs explicitly disclosed.
 The form defaults to London. Choose another city from the UK dropdown to search its supported
 airport and, where listed, a dated rail connection. A direct service and complete live itinerary
 are not guaranteed. Non-London rail includes a separate UK train and an unpriced London station

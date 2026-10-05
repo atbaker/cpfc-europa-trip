@@ -98,9 +98,12 @@ def create_app(
 
     @app.middleware("http")
     async def protect(request: Request, call_next: Any) -> Response:
-        if request.method == "POST" and request.url.path.startswith("/api/"):
-            if request.headers.get("origin") != config.frontend_origin:
-                return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
+        if (
+            request.method == "POST"
+            and request.url.path.startswith("/api/")
+            and request.headers.get("origin") != config.frontend_origin
+        ):
+            return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         if int(request.headers.get("content-length", "0")) > 32000:
             return JSONResponse({"detail": "Request is too large"}, status_code=413)
         response: Response = await call_next(request)

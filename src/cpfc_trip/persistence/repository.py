@@ -41,9 +41,15 @@ class Repository:
             fixtures, routes = load_catalog()
             brief = validate_brief(request.brief, fixtures, datetime.now(UTC))
             routes = routes_for_origin(routes, brief.origin_city)
-            if brief.transport_mode == "rail" and not any(r.mode == "rail" for r in routes):
+            if brief.transport_mode == "rail" and any(
+                not any(
+                    route.mode == "rail" and route.enabled and route.fixture_id == fixture_id
+                    for route in routes
+                )
+                for fixture_id in brief.fixture_ids
+            ):
                 raise ValueError(
-                    "Train search is not available from this city. Choose flights or another city."
+                    "Train search is not available for this match from this city. Choose flights or another match."
                 )
             if self.settings.planner_mode == "live":
                 enabled = {r.fixture_id for r in routes if r.enabled}

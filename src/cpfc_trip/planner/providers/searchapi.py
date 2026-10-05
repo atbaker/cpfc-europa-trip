@@ -393,7 +393,7 @@ def normalize_stay(
         if "shared bathroom" in name.lower() or "shared bathroom" in room_facts
         else "unknown"
     )
-    if spec.private_room and is_dorm or spec.private_bathroom and bathroom != "private":
+    if (spec.private_room and is_dorm) or (spec.private_bathroom and bathroom != "private"):
         return None
     return Stay(
         id=ref.id,

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "cpfc-trip"
 version = "0.1.0"
-description = "London-based Palace away-trip planner"
+description = "UK departure-city Palace away-trip planner"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "fastapi>=0.115", "uvicorn[standard]>=0.34", "pydantic[email]>=2.13",

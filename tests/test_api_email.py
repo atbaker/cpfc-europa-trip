@@ -1,17 +1,21 @@
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from temporalio.client import WorkflowQueryFailedError
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
 from cpfc_trip.api import create_app
-from cpfc_trip.domain import CreateSession, Itinerary, Snapshot
+from cpfc_trip.catalog import load_catalog
+from cpfc_trip.config import Settings
+from cpfc_trip.domain import Brief, CreateSession, Itinerary, SessionInput, Snapshot
 from cpfc_trip.emailing import render
 from cpfc_trip.persistence.models import DeliveryRow, SessionRow
+from cpfc_trip.persistence.repository import Repository
 from cpfc_trip.planner.agent import Intent
 from cpfc_trip.planner.planning import choose, enumerate_specs
 from cpfc_trip.planner.recorded import sample
@@ -107,6 +111,20 @@ async def test_unsupported_train_city_and_city_fail_before_search(repository, se
         )
 
 
+@pytest.mark.parametrize("city", ["London", "Manchester"])
+@pytest.mark.parametrize("destination", ["Istanbul", "Białystok", "Salzburg"])
+async def test_train_mode_requires_a_route_for_the_selected_match(
+    repository: Repository, city: str, destination: str
+) -> None:
+    fixture = next(item for item in load_catalog()[0] if item.city == destination)
+    brief = Brief(fixture_ids=(fixture.id,), origin_city=city, transport_mode="rail")
+    with pytest.raises(ValueError, match="Train search is not available"):
+        await repository.create(
+            CreateSession(submission_id=uuid4(), email="supporter@example.com", brief=brief),
+            "x" * 64,
+        )
+
+
 async def test_ambiguous_email_expires_without_resend(repository, session_input):
     request = CreateSession(
         submission_id=uuid4(), email="supporter@example.com", brief=session_input.brief
@@ -146,36 +164,36 @@ def test_email_escapes_and_has_no_script_links(session_input):
     assert "Prices may have changed" in payload["text"]
 
 
-def test_api_auth_polling_204_and_csrf(settings, session_input):
+async def test_api_auth_polling_204_and_csrf(
+    settings: Settings, session_input: SessionInput
+) -> None:
     repository = AsyncMock()
     repository.authorize.return_value = False
     temporal = AsyncMock()
-    from unittest.mock import Mock
-
     handle = Mock()
     handle.query = AsyncMock(return_value=None)
     temporal.get_workflow_handle = Mock(return_value=handle)
     app = create_app(settings, repository, temporal)
     sid = session_input.public_session_id
-    with TestClient(app) as client:
-        assert client.get(f"/api/sessions/{sid}/snapshot").status_code == 404
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client,
+    ):
+        assert (await client.get(f"/api/sessions/{sid}/snapshot")).status_code == 404
         assert not handle.query.called
         repository.authorize.return_value = True
         client.cookies.set(f"cpfc_{sid}", "x" * 64)
-        response = client.get(f"/api/sessions/{sid}/snapshot?after_revision=3")
+        response = await client.get(f"/api/sessions/{sid}/snapshot?after_revision=3")
         assert response.status_code == 204 and response.headers["cache-control"] == "no-store"
         assert (
-            client.post(
+            await client.post(
                 f"/api/sessions/{sid}/finalize",
                 json={"id": str(uuid4())},
                 headers={"Origin": "https://evil.example"},
-            ).status_code
-            == 403
-        )
+            )
+        ).status_code == 403
         handle.query.assert_awaited_once()
-        from temporalio.client import WorkflowQueryFailedError
-
         handle.query.side_effect = WorkflowQueryFailedError("sensitive upstream diagnostics")
-        response = client.get(f"/api/sessions/{sid}/snapshot")
+        response = await client.get(f"/api/sessions/{sid}/snapshot")
         assert response.status_code == 503
         assert "sensitive" not in response.text
