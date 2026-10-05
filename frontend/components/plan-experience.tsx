@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ApiError, Snapshot, newer, request, terminal } from "../lib/api";
 import { ItineraryView } from "./itinerary-view";
+import { PlanningProgress } from "./planning-progress";
 
 type Pending = { id: string; text: string; accepted: boolean };
 export function PlanExperience() {
@@ -17,6 +18,15 @@ export function PlanExperience() {
   const [sending, setSending] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const finalizeId = useRef<string | null>(null);
+  const [city] = useState<string | undefined>(() => {
+    if (typeof window === "undefined" || !session) return undefined;
+    try { return sessionStorage.getItem(`cpfc-city-${session}`) ?? undefined; } catch { return undefined; }
+  });
+  const [showHero, setShowHero] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const heroShown = useRef(false);
+  const hadItinerary = useRef(false);
+  const hasItinerary = !!snapshot?.itinerary;
   const refresh = useRef<() => void>(() => {});
   useEffect(() => {
     if (!session) return;
@@ -50,6 +60,21 @@ export function PlanExperience() {
     void poll();
     return () => { stopped = true; clearTimeout(timer); document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); };
   }, [session]);
+  // Anti-flash gate: never show the elaborate stepper for instant/recorded results.
+  useEffect(() => { const t = setTimeout(() => setShowHero(true), 400); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    if (showHero && snapshot && !snapshot.itinerary && !terminal(snapshot)) heroShown.current = true;
+  }, [showHero, snapshot]);
+  // Brief all-green "done" beat before revealing the first itinerary, only if the hero was shown.
+  useEffect(() => {
+    if (hasItinerary && !hadItinerary.current && heroShown.current) {
+      setCompleting(true);
+      const t = setTimeout(() => setCompleting(false), 450);
+      hadItinerary.current = hasItinerary;
+      return () => clearTimeout(t);
+    }
+    hadItinerary.current = hasItinerary;
+  }, [hasItinerary]);
   async function send(command: Pending) {
     setSending(true); setPending(command); setError("");
     try {
@@ -66,14 +91,17 @@ export function PlanExperience() {
   if (!session) return <div className="plan"><h1>No session selected</h1><Link href="/">Start a trip brief →</Link></div>;
   const closed = terminal(snapshot) || snapshot?.phase === "finalizing" || !!snapshot?.finalization_reason || finalizing;
   return <div className="plan">{snapshot?.development_mode && <div className="notice">Development preview · Synthetic trips and prices · Email previews only</div>}<div className="plan-heading"><div><p className="eyebrow">YOUR AWAY DAYS</p><h1>A plan worth<br />travelling for.</h1></div><span className="tag">From London</span></div>
-    <div className="status" role="status" aria-live="polite"><span className={terminal(snapshot) ? "dot done" : "dot"} />{snapshot?.phase === "failed" ? "We couldn’t complete this trip request." : snapshot?.progress_message ?? "Connecting to your planning session…"}</div>
+    <div className={terminal(snapshot) ? "status" : "status sr-only"} role="status" aria-live="polite">{snapshot?.phase === "failed" ? "We couldn’t complete this trip request." : snapshot?.progress_message ?? "Connecting to your planning session…"}</div>
     {error && <p className="error" role="alert">{error}</p>}
-    {!snapshot?.itinerary && !terminal(snapshot) && <div className="panel skeleton" aria-label="Preparing your itinerary"><div /><div /><div /></div>}
+    {!snapshot?.itinerary && !terminal(snapshot) && (showHero
+      ? <PlanningProgress snapshot={snapshot} city={city} variant="hero" />
+      : <div className="plan-connecting" aria-hidden="true"><span className="plan-connecting-mark" />Preparing your route…</div>)}
+    {completing && <PlanningProgress snapshot={snapshot} city={city} variant="hero" forceDone />}
     {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. <Link href="/">Try another trip brief →</Link></p>}
-    {snapshot?.itinerary && <ItineraryView itinerary={snapshot.itinerary} />}
+    {snapshot?.itinerary && !completing && <div className={`plan-reveal${pending?.accepted ? " revising" : ""}`}><ItineraryView itinerary={snapshot.itinerary} /></div>}
     {!!snapshot?.transcript_tail.length && <section className="conversation panel" aria-label="Your conversation"><h2>Fine-tune your away day</h2>{snapshot.transcript_tail.map(turn => <div key={turn.id} className={`message ${turn.role}`}><strong>{turn.role === "user" ? "You" : "Your trip planner"}</strong><p>{turn.content}</p></div>)}
       {pending && !snapshot.transcript_tail.some(t => t.turn_id === pending.id && t.role === "user") && <div className="message user"><strong>You · pending</strong><p>{pending.text}</p></div>}
-      {pending && <p role="status">{pending.accepted ? "Working on your message…" : "Awaiting confirmation…"}</p>}
+      {pending && (pending.accepted ? <PlanningProgress snapshot={snapshot} city={city} variant="inline" /> : <p role="status">Awaiting confirmation…</p>)}
       {pending && !pending.accepted && !sending && !closed && <button onClick={() => void send(pending)}>Retry this message</button>}
       {!closed && <form onSubmit={e => { e.preventDefault(); if (text.trim() && !pending) void send({ id: crypto.randomUUID(), text: text.trim(), accepted: false }); }}><label htmlFor="message">Ask a question or change your trip</label><textarea id="message" value={text} onChange={e => setText(e.target.value)} maxLength={2000} rows={3} disabled={!!pending || sending} /><div className="section-heading"><small>{snapshot.follow_ups_remaining} follow-ups remaining</small><button disabled={!!pending || sending || !text.trim()} className="secondary">Send message ↑</button></div></form>}
     </section>}

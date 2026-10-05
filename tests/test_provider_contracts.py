@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
+from cpfc_trip.config import Settings
 from cpfc_trip.domain import Party, SearchSpec
 from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import total
@@ -138,6 +139,64 @@ async def test_provider_error_never_exposes_key(settings):
         assert api.calls == 1
 
 
+async def test_transient_retry_repeats_only_failed_request(settings: Settings) -> None:
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import SearchApi
+
+    requests: list[httpx.QueryParams] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.params)
+        return httpx.Response(503 if len(requests) == 2 else 200, json={"results": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+            limit=3,
+        )
+        assert await api.get({"engine": "google", "q": "discovery"}) == {"results": []}
+        assert await api.get({"engine": "google", "q": "detail"}) == {"results": []}
+        assert api.calls == 3
+        assert requests[0] != requests[1] == requests[2]
+
+
+async def test_permanent_failure_and_exhausted_budget_do_not_retry(settings: Settings) -> None:
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import ProviderError, SearchApi
+
+    calls: list[httpx.Request] = []
+
+    def reject(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(400)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reject)) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+            limit=2,
+        )
+        with pytest.raises(ProviderError):
+            await api.get({"engine": "google"})
+        assert api.calls == 1
+        assert len(calls) == 1
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(503))
+    ) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+            limit=1,
+        )
+        with pytest.raises(ProviderError):
+            await api.get({"engine": "google"})
+        assert api.calls == 1
+
+
 async def test_later_property_failure_preserves_checked_rooms(session_input, settings):
     from cpfc_trip.planner.providers.searchapi import search_stays
 
@@ -147,6 +206,7 @@ async def test_later_property_failure_preserves_checked_rooms(session_input, set
     responses = [
         httpx.Response(200, json=search),
         httpx.Response(200, json=data("hotel-detail")),
+        httpx.Response(503),
         httpx.Response(503),
     ]
     async with httpx.AsyncClient(
@@ -160,4 +220,4 @@ async def test_later_property_failure_preserves_checked_rooms(session_input, set
         batch = await search_stays(api, spec(session_input))
         assert len(batch.stays) == 1
         assert batch.stays[0].room_description == "Twin Room"
-        assert batch.calls == 3
+        assert batch.calls == 4

@@ -47,7 +47,7 @@ PLANNER_INSTRUCTIONS = (
 # A placeholder allows importing/validating schemas and running recorded tests without a key.
 MODEL_NAME = "gemini-3.8-flash"
 MODEL_SETTINGS = GoogleModelSettings(
-    google_thinking_config={"thinking_level": ThinkingLevel.LOW}, max_tokens=4096, timeout=40
+    google_thinking_config={"thinking_level": ThinkingLevel.LOW}, max_tokens=4096, timeout=120
 )
 model = MeteredGoogleModel(
     MODEL_NAME,
@@ -67,8 +67,8 @@ planner = Agent(
     capabilities=[
         TemporalDurability(
             model_activity_config={
-                "start_to_close_timeout": timedelta(seconds=45),
-                "schedule_to_close_timeout": timedelta(seconds=85),
+                "start_to_close_timeout": timedelta(seconds=130),
+                "schedule_to_close_timeout": timedelta(seconds=270),
                 "retry_policy": RetryPolicy(maximum_attempts=2),
             }
         )

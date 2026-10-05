@@ -1,0 +1,9 @@
+# Development notes
+
+## 5 October 2026 — UI and search reliability PR preparation
+
+- Kept Eagles Away and Powered by Temporal branding. The home page uses the jersey-inspired editorial sash, the existing trip fields appear in three steps, and a dated illustrative plan remains at the bottom of desktop layouts. The Temporal lockup is a local image asset.
+- Replaced the waiting placeholders with rotating route copy and a route illustration. The duplicate visible progress line was removed; workflow progress remains in an accessible live region. Shared CSS spacing values now align page gutters, panels, cards and form actions. Desktop and 390px mobile checks found no horizontal overflow.
+- Live search now evaluates route/date candidates in waves and keeps completed evidence when a later wave is slow. Each transient SearchApi request can retry once with the same parameters; paid attempts, adapter time and workflow turn time remain bounded. Returning a first complete candidate can reduce the number of alternatives. Market-wide lowest prices are not claimed.
+- The full `scripts/check.sh` gate passed locally: 53 Python tests passed, two PostgreSQL tests skipped because no test database was configured, and 13 frontend tests passed. Ruff, mypy, generated API schema comparison, TypeScript, ESLint and static build passed. The first sandboxed Temporal test run could not start its local server; rerunning with local process permission passed all eight workflow tests.
+- Unverified: no new paid live-provider run or production deployment was performed for this PR. Current travel prices and booking links still require rechecking before purchase; the full accessibility and production acceptance reviews remain open.

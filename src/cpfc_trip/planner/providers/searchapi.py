@@ -28,6 +28,7 @@ from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import money
 
 ENDPOINT = "https://www.searchapi.io/api/v1/search"
+REQUEST_CAPS = {"flight": 6, "rail": 8, "stay": 8}
 
 
 class ProviderError(Exception):
@@ -39,9 +40,10 @@ def fingerprint(params: object) -> str:
 
 
 class SearchApi:
-    def __init__(self, client: httpx.AsyncClient, settings: Settings, limit: int = 5):
+    def __init__(self, client: httpx.AsyncClient, settings: Settings, limit: int = 8):
         self.client, self.settings, self.limit = client, settings, limit
         self.calls = 0
+        self.deadline = asyncio.get_running_loop().time() + 80
 
     async def get(self, params: dict[str, Any]) -> dict[str, Any]:
         if (
@@ -49,35 +51,45 @@ class SearchApi:
             or not self.settings.searchapi_api_key.get_secret_value()
         ):
             raise ProviderError("Travel search is currently unavailable")
-        if self.calls >= self.limit:
-            raise ProviderError("Search request limit reached")
-        self.calls += 1
-        # Adapter Activities make one attempt; HTTP SDK retries are off.
-        try:
-            response = await self.client.get(
-                ENDPOINT,
-                params=params,
-                headers={
-                    "Authorization": f"Bearer {self.settings.searchapi_api_key.get_secret_value()}"
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            if len(response.content) > 4_000_000:
-                raise ProviderError("Travel search response exceeded its size limit")
-            data = response.json()
-            if not isinstance(data, dict) or data.get("error") or data.get("errors"):
-                raise ProviderError("Travel search returned an error")
-            return data
-        except (httpx.HTTPError, ValueError) as exc:
-            # Engine/status only: never log request URLs, headers, provider bodies or secrets.
-            logging.getLogger("cpfc_trip.provider").warning(
-                "SearchApi request failed: engine=%s error=%s status=%s",
-                params.get("engine"),
-                type(exc).__name__,
-                exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None,
-            )
-            raise ProviderError("Travel search did not return usable results") from None
+        for attempt in range(2):
+            remaining = self.deadline - asyncio.get_running_loop().time()
+            if self.calls >= self.limit or remaining <= 0:
+                raise ProviderError("Search request limit or deadline reached")
+            self.calls += 1
+            try:
+                response = await self.client.get(
+                    ENDPOINT,
+                    params=params,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.searchapi_api_key.get_secret_value()}"
+                    },
+                    timeout=min(20, remaining),
+                )
+                response.raise_for_status()
+                if len(response.content) > 4_000_000:
+                    raise ProviderError("Travel search response exceeded its size limit")
+                data = response.json()
+                if not isinstance(data, dict) or data.get("error") or data.get("errors"):
+                    raise ProviderError("Travel search returned an error")
+                return data
+            except (httpx.HTTPError, ValueError) as exc:
+                # Engine/status only: never log request URLs, headers, bodies or secrets.
+                logging.getLogger("cpfc_trip.provider").warning(
+                    "SearchApi request failed: engine=%s error=%s status=%s",
+                    params.get("engine"),
+                    type(exc).__name__,
+                    exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None,
+                )
+                retryable = isinstance(exc, httpx.TransportError) or (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and (exc.response.status_code == 429 or exc.response.status_code >= 500)
+                )
+                if not retryable or attempt or self.calls >= self.limit:
+                    raise ProviderError("Travel search did not return usable results") from None
+                await asyncio.sleep(
+                    min(0.25, max(0, self.deadline - asyncio.get_running_loop().time()))
+                )
+        raise ProviderError("Travel search did not return usable results")
 
 
 def evidence(data: dict[str, Any], source: str, checked: datetime) -> Evidence:
@@ -210,7 +222,7 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
     initial = await api.get(p)
     choices = initial.get("best_flights", []) + initial.get("other_flights", [])
     journeys: list[Journey] = []
-    for item in choices[:2]:
+    for item in choices[:1]:
         if not item.get("departure_token"):
             continue
         try:
@@ -384,7 +396,7 @@ async def search_stays(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         )
 
     properties.sort(key=property_rank)
-    for prop in properties[:3]:
+    for prop in properties[:2]:
         url = hotel_url(
             prop.get("link", ""), str(spec.outbound_date), str(spec.return_date), spec.party
         )
@@ -568,9 +580,9 @@ async def acquire(spec: SearchSpec, mode: str) -> SearchBatch:
     if not spec.route.enabled:
         return SearchBatch(gaps=("This catalog pattern has not passed its evidence review.",))
     async with httpx.AsyncClient(follow_redirects=False) as client:
-        api = SearchApi(client, Settings())
+        api = SearchApi(client, Settings(), limit=REQUEST_CAPS[mode])
         try:
-            async with asyncio.timeout(100):
+            async with asyncio.timeout(80):
                 if mode == "stay":
                     return await search_stays(api, spec)
                 if mode == "flight":
