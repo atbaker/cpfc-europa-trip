@@ -28,15 +28,16 @@ function useTicker(active: boolean, count: number): number {
 
 // Decorative, phase-anchored progress. The .status live region in PlanExperience
 // announces actual phase changes without repeating the rotating copy visually.
-export function PlanningProgress({ snapshot, city, variant = "hero", forceDone = false }: {
+export function PlanningProgress({ snapshot, city, origin = "London", variant = "hero", forceDone = false }: {
   snapshot: Snapshot | null;
   city?: string;
+  origin?: string;
   variant?: "hero" | "inline";
   forceDone?: boolean;
 }) {
   const reduced = useReducedMotion();
   const stage: Stage = forceDone ? "done" : stageFor(snapshot, { ignoreItinerary: variant === "inline" });
-  const lines = tickerLines(stage, city);
+  const lines = tickerLines(stage, city, origin);
   const index = useTicker((stage === "preferences" || stage === "searching") && !reduced, lines.length);
   const rotatingText = lines[index];
 
@@ -55,7 +56,7 @@ export function PlanningProgress({ snapshot, city, variant = "hero", forceDone =
     <div className={`journey-card ${stage}`}>
       <div className="journey-card-heading"><span className="card-label">YOUR AWAY DAY</span><span className="journey-card-badge">{stage === "done" ? "READY" : "IN THE MAKING"}</span></div>
       <div className="journey-route">
-        <div className="journey-city"><span className="journey-pin" /><small>STARTING FROM</small><strong>London</strong></div>
+        <div className="journey-city"><span className="journey-pin" /><small>STARTING FROM</small><strong>{origin}</strong></div>
         <div className="journey-arc"><svg viewBox="0 0 320 90" preserveAspectRatio="none" focusable="false"><path d="M 10 72 Q 160 -35 310 72" /></svg><span className="journey-plane">✈</span></div>
         <div className="journey-city destination"><span className="journey-pin" /><small>HEADING TO</small><strong>{destination}</strong></div>
       </div>

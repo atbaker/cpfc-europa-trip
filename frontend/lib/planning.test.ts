@@ -35,6 +35,7 @@ describe("tickerLines", () => {
   });
   it("injects the city when known", () => {
     expect(tickerLines("searching", "Lyon")).toContain("Comparing places to stay in Lyon…");
+    expect(tickerLines("searching", "Lyon", "Manchester")).toContain("Comparing routes from Manchester…");
   });
   it("stays generic without a city", () => {
     expect(tickerLines("searching")).toContain("Comparing places to stay…");

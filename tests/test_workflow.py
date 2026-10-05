@@ -116,6 +116,71 @@ async def test_no_draft_sends_failure_notice(environment, session_input):
     assert result.phase == "failed" and result.email_kind == "failure_notice" and len(emails) == 1
 
 
+async def test_no_nonstop_flights_explains_failed_city_search(
+    environment, session_input, monkeypatch
+):
+    import json
+
+    from google.genai.types import GenerateContentResponse
+
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.origins import routes_for_origin
+    from cpfc_trip.planner.agent import model
+    from cpfc_trip.planner.recorded import sample
+
+    async def intent(**kwargs):
+        return GenerateContentResponse.model_validate(
+            {
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": json.dumps({"action": "revise", "answer": ""})}],
+                        },
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(model.client.aio.models, "generate_content", intent)
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        return SearchBatch(gaps=("No nonstop flights were found for this route and date pair.",))
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    brief = session_input.brief.model_copy(
+        update={"origin_city": "Edinburgh", "transport_mode": "flight"}
+    )
+    routes = routes_for_origin(session_input.routes, "Edinburgh")
+    value = session_input.model_copy(
+        update={"brief": brief, "routes": routes, "planner_mode": "live"}
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        result = await environment.client.execute_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+    assert result.phase == "failed" and result.email_kind == "failure_notice"
+    assert (
+        "No nonstop flights were found from Edinburgh to Lyon" in result.transcript_tail[-1].content
+    )
+    assert "Try trains" in result.transcript_tail[-1].content
+
+
 async def test_durable_pydantic_model_and_query_during_activity(
     environment, session_input, monkeypatch
 ):

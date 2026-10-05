@@ -8,6 +8,7 @@ import pytest
 
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import Party, SearchSpec
+from cpfc_trip.origins import routes_for_origin
 from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import total
 from cpfc_trip.planner.providers.searchapi import (
@@ -46,6 +47,18 @@ def test_flight_round_trip_counted_once(session_input):
     assert price.minor_units == 14800
     url = parse_qs(urlsplit(j.outbound[0].offer.booking_url).query)
     assert url["curr"] == ["GBP"] and url["gl"] == ["GB"] and url["tfs"]
+
+
+def test_selected_city_airports_gate_returned_flights(session_input):
+    route = routes_for_origin(session_input.routes, "Manchester")[0]
+    selected = spec(session_input).model_copy(update={"route": route})
+    raw = data("flight-booking")
+    assert not normalize_flights(raw, selected, CHECKED).journeys
+    raw["selected_flights"][0]["flights"][0]["departure_airport"]["id"] = "MAN"
+    raw["selected_flights"][1]["flights"][0]["arrival_airport"]["id"] = "MAN"
+    result = normalize_flights(raw, selected, CHECKED)
+    assert result.journeys[0].outbound[0].origin == "MAN"
+    assert result.journeys[0].inbound[0].destination == "MAN"
 
 
 def test_hotel_price_tax_and_exact_room_identity(session_input):
@@ -137,6 +150,28 @@ async def test_provider_error_never_exposes_key(settings):
             await api.get({"engine": "google"})
         assert "test-secret" not in str(exc.value)
         assert api.calls == 1
+
+
+async def test_no_nonstop_flights_has_specific_gap(session_input, settings):
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import search_flights
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, json={"error": "Google Flights didn't return any results."}
+            )
+        )
+    ) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+        )
+        result = await search_flights(api, spec(session_input))
+    assert result.calls == 1
+    assert not result.journeys
+    assert result.gaps == ("No nonstop flights were found for this route and date pair.",)
 
 
 async def test_transient_retry_repeats_only_failed_request(settings: Settings) -> None:

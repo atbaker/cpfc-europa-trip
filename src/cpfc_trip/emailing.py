@@ -71,7 +71,7 @@ def render(snapshot: Snapshot) -> dict[str, str]:
     text += [
         "",
         "Prices may have changed. Confirm every detail on the travel provider's site.",
-        "No match tickets, bookings, or travel to/from the London departure hub are included.",
+        f"No match tickets, bookings, or travel to/from the {snapshot.origin_city} departure hub are included.",
     ]
     lines = []
     for line in text:

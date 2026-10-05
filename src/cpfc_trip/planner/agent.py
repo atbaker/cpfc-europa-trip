@@ -1,7 +1,7 @@
 """Durable structured interpretation; the model cannot author prices, legs or URLs."""
 
 from datetime import timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
 from google.auth.credentials import AnonymousCredentials
 from google.genai.types import HttpRetryOptions, ThinkingLevel
@@ -25,14 +25,16 @@ class Intent(Record):
     private_room: bool = False
     private_bathroom: bool = False
     transport_mode: Literal["flight", "rail"] | None = None
-    preferred_airports: tuple[Literal["LHR", "LGW", "STN", "LTN"], ...] = Field((), max_length=4)
+    preferred_airports: tuple[Annotated[str, Field(pattern=r"^[A-Z]{3}$")], ...] = Field(
+        (), max_length=4
+    )
     unsupported_requirements: tuple[str, ...] = Field((), max_length=12)
 
 
 PLANNER_INSTRUCTIONS = (
-    "You interpret a Palace London-based travel brief and short follow-ups. "
+    "You interpret a Palace travel brief and short follow-ups. "
     "Return structured hard constraints and a concise answer. Initial turns always revise. "
-    "Support budget changes, private room/bathroom, flight versus rail, and LHR/LGW/STN/LTN preferences. "
+    "Support budget changes, private room/bathroom, flight versus rail, and preferences among the selected departure city's airports. "
     "List any other hard requirements as unsupported_requirements; never silently ignore them. "
     "Use supplied committed evidence for questions. Never invent or change prices, schedules, "
     "links, accessibility guarantees or availability. No booking or ticket service. "

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from cpfc_trip.catalog import load_catalog, validate_brief
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import CreateSession, Limits, SessionInput
+from cpfc_trip.origins import routes_for_origin
 from cpfc_trip.persistence.models import SessionRow
 
 
@@ -39,6 +40,11 @@ class Repository:
                 return SessionInput.model_validate(old.workflow_input)
             fixtures, routes = load_catalog()
             brief = validate_brief(request.brief, fixtures, datetime.now(UTC))
+            routes = routes_for_origin(routes, brief.origin_city)
+            if brief.transport_mode == "rail" and not any(r.mode == "rail" for r in routes):
+                raise ValueError(
+                    "Train search is not available from this city. Choose flights or another city."
+                )
             if self.settings.planner_mode == "live":
                 enabled = {r.fixture_id for r in routes if r.enabled}
                 if not set(brief.fixture_ids) <= enabled:

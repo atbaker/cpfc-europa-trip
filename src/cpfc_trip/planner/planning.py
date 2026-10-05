@@ -57,7 +57,7 @@ def enumerate_specs(
             for start, end in pairs
             for r in allowed
         ]
-        grouped.append(options[:1] if recorded else options)
+        grouped.append(options[: len(allowed)] if recorded else options)
     # Give every selected fixture an initial route/date candidate before spending on alternatives.
     return [
         options[index]

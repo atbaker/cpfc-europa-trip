@@ -72,6 +72,41 @@ async def test_submission_and_email_idempotency(repository, session_input, tmp_p
         await env.run(deliver, changed)
 
 
+async def test_session_uses_selected_departure_airports(repository, session_input):
+    brief = session_input.brief.model_copy(update={"origin_city": "Manchester"})
+    data = await repository.create(
+        CreateSession(submission_id=uuid4(), email="supporter@example.com", brief=brief),
+        "x" * 64,
+    )
+    assert data.brief.origin_city == "Manchester"
+    assert {route.origin for route in data.routes} == {"MAN", "Manchester"}
+
+
+async def test_unsupported_train_city_and_city_fail_before_search(repository, session_input):
+    brief = session_input.brief.model_copy(
+        update={"origin_city": "Manchester", "transport_mode": "rail"}
+    )
+    rail = await repository.create(
+        CreateSession(submission_id=uuid4(), email="supporter@example.com", brief=brief),
+        "x" * 64,
+    )
+    assert any(route.mode == "rail" for route in rail.routes)
+    unsupported_rail = brief.model_copy(update={"origin_city": "Belfast"})
+    with pytest.raises(ValueError, match="Train search is not available"):
+        await repository.create(
+            CreateSession(
+                submission_id=uuid4(), email="supporter@example.com", brief=unsupported_rail
+            ),
+            "x" * 64,
+        )
+    unsupported = brief.model_copy(update={"origin_city": "Paris", "transport_mode": "flight"})
+    with pytest.raises(ValueError, match="supported UK departure city"):
+        await repository.create(
+            CreateSession(submission_id=uuid4(), email="supporter@example.com", brief=unsupported),
+            "x" * 64,
+        )
+
+
 async def test_ambiguous_email_expires_without_resend(repository, session_input):
     request = CreateSession(
         submission_id=uuid4(), email="supporter@example.com", brief=session_input.brief

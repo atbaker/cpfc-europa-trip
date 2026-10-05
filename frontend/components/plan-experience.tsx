@@ -90,18 +90,19 @@ export function PlanExperience() {
   }
   if (!session) return <div className="plan"><h1>No session selected</h1><Link href="/">Start a trip brief →</Link></div>;
   const closed = terminal(snapshot) || snapshot?.phase === "finalizing" || !!snapshot?.finalization_reason || finalizing;
-  return <div className="plan">{snapshot?.development_mode && <div className="notice">Development preview · Synthetic trips and prices · Email previews only</div>}<div className="plan-heading"><div><p className="eyebrow">YOUR AWAY DAYS</p><h1>A plan worth<br />travelling for.</h1></div><span className="tag">From London</span></div>
+  const origin = snapshot?.origin_city ?? "your city";
+  return <div className="plan">{snapshot?.development_mode && <div className="notice">Development preview · Synthetic trips and prices · Email previews only</div>}<div className="plan-heading"><div><p className="eyebrow">YOUR AWAY DAYS</p><h1>A plan worth<br />travelling for.</h1></div><span className="tag">From {origin}</span></div>
     <div className={terminal(snapshot) ? "status" : "status sr-only"} role="status" aria-live="polite">{snapshot?.phase === "failed" ? "We couldn’t complete this trip request." : snapshot?.progress_message ?? "Connecting to your planning session…"}</div>
     {error && <p className="error" role="alert">{error}</p>}
     {!snapshot?.itinerary && !terminal(snapshot) && (showHero
-      ? <PlanningProgress snapshot={snapshot} city={city} variant="hero" />
+      ? <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" />
       : <div className="plan-connecting" aria-hidden="true"><span className="plan-connecting-mark" />Preparing your route…</div>)}
-    {completing && <PlanningProgress snapshot={snapshot} city={city} variant="hero" forceDone />}
+    {completing && <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" forceDone />}
     {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. <Link href="/">Try another trip brief →</Link></p>}
     {snapshot?.itinerary && !completing && <div className={`plan-reveal${pending?.accepted ? " revising" : ""}`}><ItineraryView itinerary={snapshot.itinerary} /></div>}
     {!!snapshot?.transcript_tail.length && <section className="conversation panel" aria-label="Your conversation"><h2>{closed ? "Your trip conversation" : "Fine-tune your away day"}</h2>{snapshot.transcript_tail.map(turn => <div key={turn.id} className={`message ${turn.role}`}><strong>{turn.role === "user" ? "You" : "Your trip planner"}</strong><p>{turn.content}</p></div>)}
       {pending && !snapshot.transcript_tail.some(t => t.turn_id === pending.id && t.role === "user") && <div className="message user"><strong>You · pending</strong><p>{pending.text}</p></div>}
-      {pending && (pending.accepted ? <PlanningProgress snapshot={snapshot} city={city} variant="inline" /> : <p role="status">Awaiting confirmation…</p>)}
+      {pending && (pending.accepted ? <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="inline" /> : <p role="status">Awaiting confirmation…</p>)}
       {pending && !pending.accepted && !sending && !closed && <button onClick={() => void send(pending)}>Retry this message</button>}
       {!closed && <form onSubmit={e => { e.preventDefault(); if (text.trim() && !pending) void send({ id: crypto.randomUUID(), text: text.trim(), accepted: false }); }}><label htmlFor="message">Ask a question or change your trip</label><textarea id="message" value={text} onChange={e => setText(e.target.value)} maxLength={2000} rows={3} disabled={!!pending || sending} /><div className="section-heading"><small>{snapshot.follow_ups_remaining} follow-ups remaining</small><button disabled={!!pending || sending || !text.trim()} className="secondary">Send message ↑</button></div></form>}
       {closed && <div className="notice conversation-closed">{terminal(snapshot) ? "This planning session has ended. Messages are closed." : "We’re preparing your email, so messages are closed."} <Link href="/">Start a new trip brief →</Link></div>}

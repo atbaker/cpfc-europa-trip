@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -24,6 +24,7 @@ from cpfc_trip.domain import (
     SearchSpec,
     Stay,
 )
+from cpfc_trip.origins import UK_RAIL
 from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import money
 
@@ -33,6 +34,10 @@ REQUEST_CAPS = {"flight": 6, "rail": 8, "stay": 8}
 
 class ProviderError(Exception):
     """A sanitized, user-safe provider failure (never includes credentials or raw URLs)."""
+
+
+class NoResultsError(ProviderError):
+    """The provider explicitly found no results for this search."""
 
 
 def fingerprint(params: object) -> str:
@@ -69,6 +74,11 @@ class SearchApi:
                 if len(response.content) > 4_000_000:
                     raise ProviderError("Travel search response exceeded its size limit")
                 data = response.json()
+                if (
+                    isinstance(data, dict)
+                    and data.get("error") == "Google Flights didn't return any results."
+                ):
+                    raise NoResultsError("No flights found")
                 if not isinstance(data, dict) or data.get("error") or data.get("errors"):
                     raise ProviderError("Travel search returned an error")
                 return data
@@ -219,7 +229,13 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         gl="GB",
         hl="en",
     )
-    initial = await api.get(p)
+    try:
+        initial = await api.get(p)
+    except NoResultsError:
+        return SearchBatch(
+            calls=api.calls,
+            gaps=("No nonstop flights were found for this route and date pair.",),
+        )
     choices = initial.get("best_flights", []) + initial.get("other_flights", [])
     journeys: list[Journey] = []
     for item in choices[:1]:
@@ -446,6 +462,11 @@ def normalize_trains(
             ("Paris", "Lyon"): ("Gare de Lyon", "Lyon Part Dieu"),
             ("Lyon", "Paris"): ("Lyon Part Dieu", "Gare de Lyon"),
         }.get((origin, destination))
+        for provider_city, departure_station, london_station in UK_RAIL.values():
+            if (origin, destination) == (provider_city, "London"):
+                stations = (departure_station, london_station)
+            elif (origin, destination) == ("London", provider_city):
+                stations = (london_station, departure_station)
         if (
             not stations
             or (
@@ -533,27 +554,74 @@ def connect_rail(
     return pairs[:8]
 
 
+def london_connection(first: Leg, second: Leg, minutes: int) -> bool:
+    """Require a same-day, buffered transfer between a UK terminal and Eurostar."""
+    terminals = {station for _, _, station in UK_RAIL.values()}
+    return (
+        (
+            (first.destination in terminals and second.origin == "St Pancras International")
+            or (first.destination == "St Pancras International" and second.origin in terminals)
+        )
+        and first.arrives_at.date() == second.departs_at.date()
+        and timedelta(minutes=minutes) <= second.departs_at - first.arrives_at <= timedelta(hours=8)
+    )
+
+
 async def search_trains(api: SearchApi, spec: SearchSpec) -> SearchBatch:
-    if spec.route.id != "london-paris-lyon":
+    if spec.route.id != "london-paris-lyon" and spec.route.origin not in UK_RAIL:
         return SearchBatch(gaps=("This rail pattern has not passed station-transfer review.",))
-    legs = []
-    for origin, destination, day in [
+    segments = [
         ("London", "Paris", spec.outbound_date),
         ("Paris", "Lyon", spec.outbound_date),
         ("Lyon", "Paris", spec.return_date),
         ("Paris", "London", spec.return_date),
-    ]:
-        data = await api.get(
-            dict(
-                engine="google",
-                q=f"trains from {origin} to {destination} on {day:%d %B %Y}",
-                gl="uk",
-                hl="en",
+    ]
+    if spec.route.origin in UK_RAIL:
+        provider_city = UK_RAIL[spec.route.origin][0]
+        segments = [
+            (provider_city, "London", spec.outbound_date),
+            *segments,
+            ("London", provider_city, spec.return_date),
+        ]
+    semaphore = asyncio.Semaphore(3)
+
+    async def fetch(origin: str, destination: str, day: datetime | date) -> tuple[Leg, ...]:
+        async with semaphore:
+            data = await api.get(
+                dict(
+                    engine="google",
+                    q=f"trains from {origin} to {destination} on {day:%d %B %Y}",
+                    gl="uk",
+                    hl="en",
+                )
             )
-        )
-        legs.append(normalize_trains(data, origin, destination, str(day), datetime.now(UTC)))
-    outbound = connect_rail(legs[0], legs[1], spec.route.minimum_transfer_minutes)
-    inbound = connect_rail(legs[2], legs[3], spec.route.minimum_transfer_minutes)
+        return normalize_trains(data, origin, destination, str(day), datetime.now(UTC))
+
+    legs = await asyncio.gather(*(fetch(*segment) for segment in segments))
+    if len(legs) == 4:
+        outbound: list[tuple[Leg, ...]] = [
+            tuple(pair)
+            for pair in connect_rail(legs[0], legs[1], spec.route.minimum_transfer_minutes)
+        ]
+        inbound: list[tuple[Leg, ...]] = [
+            tuple(pair)
+            for pair in connect_rail(legs[2], legs[3], spec.route.minimum_transfer_minutes)
+        ]
+    else:
+        paris_out = connect_rail(legs[1], legs[2], spec.route.minimum_transfer_minutes)
+        paris_in = connect_rail(legs[3], legs[4], spec.route.minimum_transfer_minutes)
+        outbound = list[tuple[Leg, ...]](
+            (domestic, *pair)
+            for domestic in legs[0]
+            for pair in paris_out
+            if london_connection(domestic, pair[0], spec.route.minimum_transfer_minutes)
+        )[:8]
+        inbound = list[tuple[Leg, ...]](
+            (*pair, domestic)
+            for pair in paris_in
+            for domestic in legs[5]
+            if london_connection(pair[-1], domestic, spec.route.minimum_transfer_minutes)
+        )[:8]
     combinations = [(a, b) for a in outbound for b in inbound]
     combinations.sort(
         key=lambda pair: sum((x[-1].arrives_at - x[0].departs_at).total_seconds() for x in pair)
@@ -572,7 +640,7 @@ async def search_trains(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         calls=api.calls,
         gaps=()
         if journeys
-        else ("No dated rail connection meets the reviewed cross-Paris buffer.",),
+        else ("No dated rail connection meets the reviewed London and Paris transfer buffers.",),
     )
 
 

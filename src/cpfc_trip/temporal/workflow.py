@@ -42,6 +42,10 @@ class PlanningServiceUnavailable(Exception):
     pass
 
 
+class NoCompleteTrip(Exception):
+    """A specific, safe explanation for a search with no verifiable travel."""
+
+
 @workflow.defn(name="TravelPlanningSessionWorkflowV3")
 class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
     __pydantic_ai_agents__ = [planner]
@@ -67,6 +71,8 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
         self.state = Snapshot(
             development_mode=data.planner_mode == "recorded",
             public_session_id=data.public_session_id,
+            origin_city=data.brief.origin_city,
+            progress_message=f"Checking routes from {data.brief.origin_city}…",
             email_deadline=now + timedelta(seconds=data.limits.inactivity_seconds),
             interaction_deadline=now + timedelta(seconds=data.limits.interaction_seconds),
             follow_ups_remaining=data.limits.follow_ups,
@@ -177,11 +183,19 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             except Exception:
                 raise PlanningServiceUnavailable from None
             intent = result.output
+            if initial and self.brief.transport_mode:
+                intent = intent.model_copy(update={"transport_mode": self.brief.transport_mode})
         if intent.unsupported_requirements:
             raise UnsupportedRequirements(
                 "We cannot support these requirements yet: "
                 + "; ".join(intent.unsupported_requirements)[:1500]
                 + ". Your last saved draft is unchanged."
+            )
+        if intent.transport_mode == "rail" and not any(
+            route.mode == "rail" for route in self.data.routes
+        ):
+            raise UnsupportedRequirements(
+                "Train search is not available from this city. Your last saved draft is unchanged."
             )
         new_itinerary = self.state.itinerary
         if initial or intent.action == "revise":
@@ -318,11 +332,34 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                 if timed_out or (wave_index >= 1 and all(t.journey and t.stay for t in trips)):
                     break
             if not any(t.journey and t.stay for t in trips):
+                if (
+                    specs
+                    and all(spec.route.mode == "flight" for spec in specs)
+                    and any(
+                        "No nonstop flights were found" in gap
+                        for fixture_batches in batches.values()
+                        for batch in fixture_batches
+                        for gap in batch.gaps
+                    )
+                ):
+                    alternatives = (
+                        "Try trains, different travel dates or another starting city."
+                        if any(route.mode == "rail" for route in self.data.routes)
+                        else "Try different travel dates or another starting city."
+                    )
+                    raise NoCompleteTrip(
+                        f"No nonstop flights were found from {self.brief.origin_city} to "
+                        f"{self.data.fixtures[0].city} on the dates searched. " + alternatives
+                    )
                 raise ValueError("No valid draft")
             new_itinerary = Itinerary(
                 revision=(self.state.itinerary.revision + 1) if self.state.itinerary else 1,
                 generated_at=workflow.now(),
                 trips=trips,
+                caveats=(
+                    "Prices may have changed since retrieval. Confirm the full price before booking.",
+                    f"Match tickets and travel to/from your {self.data.brief.origin_city} departure hub are not included.",
+                ),
             )
             self.intent, self.brief = intent, effective
         answer = (
@@ -368,6 +405,8 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             # Deliberately omit raw provider/model errors and preserve the last committed plan.
             tid = command.id if command else self.data.public_session_id
             if isinstance(exc, UnsupportedRequirements):
+                failure_message = str(exc)
+            elif isinstance(exc, NoCompleteTrip):
                 failure_message = str(exc)
             elif isinstance(exc, PlanningServiceUnavailable):
                 failure_message = (

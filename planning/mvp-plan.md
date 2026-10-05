@@ -1,6 +1,7 @@
 # Eagles Away — MVP plan
 
 - Status: approved rebuild plan; SearchApi selected for flight, hotel, and train results
+- Departure update: 5 October 2026; a dropdown of supported UK airport cities replaces the fixed London origin. London remains the default. Reviewed direct UK rail services from Birmingham, Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle can connect via London and Paris for Lyon; other cities offer flights only. Edinburgh rail may arrive after 23:00 and requires hotel check-in confirmation. This supersedes older London-only statements below. Dated provider results and three-hour London/Paris buffers are required; availability is never guaranteed.
 - Implementation: [local rebuild checkpoint](2026-09-06-implementation-checkpoint.md); public MVP still in progress
 - Repository reset: 6 September 2026; initial implementation removed, planning and scripts retained
 - Price storage: ordinary durable snapshots in itinerary state; no separate quote cache or expiring handles
@@ -119,7 +120,7 @@ The form is the hero. It should feel like a trip brief, not a signup flow.
 | --- | --- | --- |
 | Team | Hidden or fixed to Crystal Palace for MVP | The model still stores `team_id`; expose a selector when another team is enabled |
 | Away matches | Card-style checkboxes; preselect the next upcoming away fixture | Users can choose one or several without knowing opponent IDs |
-| Starting from | Fixed `London`; list eligible London airports and St Pancras | Keeps the route catalog small; supporters arrange travel to the departure hub themselves |
+| Starting from | Choose a supported UK departure city; `London` is prefilled | Resolve to reviewed airport codes and available direct rail gateways. Supporters arrange travel to the departure hub themselves |
 | Travellers | `1 adult`; compact stepper; reveal child ages only when needed | Prices and room occupancy depend on party composition |
 | Flexibility | `A day either side` | Keep dates simple; advanced controls can set exact earliest departure/latest return per fixture |
 | Budget style | `££ Best value` | The default balances time, risk, and total cost |

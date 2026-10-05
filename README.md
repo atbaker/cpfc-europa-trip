@@ -1,7 +1,7 @@
 # Eagles Away
 
-A London-based travel planner for Crystal Palace supporters, supported by Temporal.
-**A local, live London → Lyon vertical slice is implemented. The public MVP is not complete or deployed.**
+A UK departure-city travel planner for Crystal Palace supporters, supported by Temporal.
+**A local, live UK flight → Lyon vertical slice is implemented, with rail from London and eight reviewed UK rail cities. The public MVP is not complete or deployed.**
 Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md) for completed work,
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 
@@ -82,10 +82,15 @@ normal API/worker alongside them on the same ports/task queue.
 
 ## Enable live planning
 
-Only the reviewed Lyon routes are enabled: London–LYS flights and London–Paris–Lyon rail,
+Only the reviewed Lyon destination route is enabled: direct flights from supported UK airport cities to LYS, plus rail through London and Paris from London, Birmingham, Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle,
 adults sharing one room. Children, multiple rooms and the other three fixture destinations
 remain unsupported in live mode. Venue and match-specific transfers still have outstanding
 checks. Quotes are retrieved planning estimates with missing costs explicitly disclosed.
+The form defaults to London. Choose another city from the UK dropdown to search its supported
+airport and, where listed, a dated rail connection. A direct service and complete live itinerary
+are not guaranteed. Non-London rail includes a separate UK train and an unpriced London station
+transfer; the planner requires at least three hours before Eurostar. Its observed leg fares are
+single-person estimates, not a verified group total.
 
 Put secrets in the ignored root `.env`, never in frontend `NEXT_PUBLIC_*` variables.
 Configure your own team account/project rather than depending on the previous engineer's login:

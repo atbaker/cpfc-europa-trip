@@ -6,6 +6,7 @@ from importlib.resources import files
 from zoneinfo import ZoneInfo
 
 from cpfc_trip.domain import Brief, Fixture, Route, Window
+from cpfc_trip.origins import canonical_origin
 
 
 def load_catalog() -> tuple[tuple[Fixture, ...], tuple[Route, ...]]:
@@ -16,6 +17,7 @@ def load_catalog() -> tuple[tuple[Fixture, ...], tuple[Route, ...]]:
 
 
 def validate_brief(brief: Brief, fixtures: tuple[Fixture, ...], now: datetime) -> Brief:
+    origin_city = canonical_origin(brief.origin_city)
     selected = {x.id: x for x in fixtures}
     if not set(brief.fixture_ids) <= selected.keys():
         raise ValueError("Choose fixtures from the Palace catalog")
@@ -37,4 +39,4 @@ def validate_brief(brief: Brief, fixtures: tuple[Fixture, ...], now: datetime) -
         if w.latest_return <= now:
             raise ValueError("Travel window is in the past")
         windows[fixture_id] = w
-    return brief.model_copy(update={"windows": tuple(windows.values())})
+    return brief.model_copy(update={"origin_city": origin_city, "windows": tuple(windows.values())})

@@ -14,6 +14,10 @@ export function PlannerForm() {
   const hasChangedStep = useRef(false);
   const attempt = useRef<{ id: string; token: string; body: string } | null>(null);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
+  const [originCities, setOriginCities] = useState<string[]>(["London"]);
+  const [railCities, setRailCities] = useState<string[]>(["London"]);
+  const [origin, setOrigin] = useState("London");
+  const [transport, setTransport] = useState<Brief["transport_mode"]>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [step, setStep] = useState(0);
   const [budget, setBudget] = useState<Brief["budget_tier"]>("value");
@@ -25,11 +29,13 @@ export function PlannerForm() {
 
   useEffect(() => {
     let cancelled = false;
-    request<{ fixtures: Fixture[]; development_mode: boolean }>("/api/catalog")
+    request<{ fixtures: Fixture[]; origin_cities: string[]; rail_cities: string[]; development_mode: boolean }>("/api/catalog")
       .then(data => {
         if (cancelled || !data) return;
         const upcoming = data.fixtures.filter(f => new Date(f.kickoff_at) > new Date());
         setFixtures(upcoming);
+        setOriginCities(data.origin_cities ?? ["London"]);
+        setRailCities(data.rail_cities ?? ["London"]);
         setSelected(upcoming.slice(0, 1).map(f => f.id));
         setSample(data.development_mode);
       })
@@ -48,6 +54,10 @@ export function PlannerForm() {
   }
 
   function nextStep() {
+    if (step === 0 && !originCities.some(city => city.toLowerCase() === origin.trim().toLowerCase())) {
+      setError("Choose a UK departure city from the suggestions.");
+      return;
+    }
     if (step === 0 && !selected.length) {
       setError("Choose at least one away match to continue.");
       return;
@@ -75,6 +85,7 @@ export function PlannerForm() {
     const form = new FormData(event.currentTarget);
     const brief: Brief = {
       fixture_ids: selected,
+      origin_city: originCities.find(city => city.toLowerCase() === origin.trim().toLowerCase()) ?? origin,
       travellers: { adults, child_ages: children, rooms: Number(form.get("rooms")) },
       budget_tier: budget,
       flexibility: form.get("flexibility") as Brief["flexibility"],
@@ -85,7 +96,7 @@ export function PlannerForm() {
       }),
       private_room: form.get("private_room") === "on",
       private_bathroom: form.get("private_bathroom") === "on",
-      transport_mode: (form.get("transport") || null) as Brief["transport_mode"],
+      transport_mode: transport,
       extra_instructions: String(form.get("instructions") ?? ""),
     };
     const content = JSON.stringify({ email: form.get("email"), brief });
@@ -106,16 +117,19 @@ export function PlannerForm() {
     finally { setBusy(false); }
   }
 
+  const railAvailable = railCities.includes(origin);
   return <form ref={formRef} className="brief panel" onSubmit={submit}>
     {sample && <div className="notice">Development preview · Synthetic trips and prices · No email is sent</div>}
-    <div className="section-heading"><span className="eyebrow">PLAN YOUR AWAY DAY</span><span className="tag">From London</span></div>
+    <div className="section-heading"><span className="eyebrow">PLAN YOUR AWAY DAY</span><span className="tag">From {origin || "your city"}</span></div>
     <nav aria-label="Trip brief progress"><ol className="form-progress">{stepNames.map((name, index) => <li key={name} aria-current={step === index ? "step" : undefined} className={index < step ? "complete" : ""}><span className="step-number">{index < step ? "✓" : index + 1}</span><span>{name}</span></li>)}</ol></nav>
     {error && <p className="error" role="alert">{error}</p>}
     <fieldset disabled={busy} className="form-pages">
       <section className="form-page" data-form-step="0" hidden={step !== 0} aria-labelledby={step === 0 ? "form-step-heading" : undefined}>
         <h2 id={step === 0 ? "form-step-heading" : undefined} ref={step === 0 ? headingRef : undefined} tabIndex={-1}>Which match are you going to?</h2>
-        <p className="form-help">Choose an away match. We’ll plan a separate London trip for each one.</p>
+        <p className="form-help">Choose where you’ll start and the away match you’re going to.</p>
         {!sample && <p className="fine">The live planner currently supports Lyon for adults sharing one room.</p>}
+        <label>Starting from<select name="origin_city" value={origin} onChange={event => { setOrigin(event.target.value); setTransport(railCities.includes(event.target.value) ? null : "flight"); }} required={step === 0}>{originCities.map(city => <option key={city} value={city}>{city}</option>)}</select></label>
+        <p className="fine">Choose a UK city. We’ll search its supported airport and any available train route.</p>
         <fieldset><legend>Choose your away matches</legend><div className="fixtures">{fixtures.map(f => <label key={f.id} className={`fixture ${selected.includes(f.id) ? "selected" : ""}`}><input type="checkbox" checked={selected.includes(f.id)} onChange={e => setSelected(e.target.checked ? [...selected, f.id] : selected.filter(id => id !== f.id))} /><span><strong>{f.opponent}</strong><small>{f.city} · {new Date(f.kickoff_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })}</small></span><span aria-hidden="true">↗</span></label>)}</div></fieldset>
         <label>Time around the match<select name="flexibility" defaultValue="day_either_side"><option value="day_either_side">A day either side</option><option value="two_days">Up to two days either side</option><option value="tight">A short trip</option></select></label>
         <details><summary>Choose specific travel dates instead</summary><p className="fine">Enter both dates for a match. Otherwise, we’ll use the time you chose above. Dates use London time.</p>{fixtures.filter(f => selected.includes(f.id)).map(f => <fieldset key={f.id} className="date-group"><legend>{f.opponent}</legend><div className="grid-two"><label>Earliest departure<input type="date" name={`start-${f.id}`} /></label><label>Latest return<input type="date" name={`end-${f.id}`} /></label></div></fieldset>)}</details>
@@ -128,7 +142,7 @@ export function PlannerForm() {
         <div className="grid-two"><label>Adults<input type="number" min="1" max="8" value={adults} onChange={e => setAdults(Number(e.target.value))} required={step === 1} /></label><label>Rooms<input name="rooms" type="number" min="1" max={sample ? 4 : 1} defaultValue="1" required={step === 1} /></label></div>
         {sample && <label>Children<select value={children.length} onChange={e => setChildren(Array.from({ length: Number(e.target.value) }, (_, i) => children[i] ?? 8))}>{Array.from({ length: 7 }, (_, i) => <option key={i} value={i}>{i}</option>)}</select></label>}
         {!!children.length && <div className="grid-two">{children.map((age, i) => <label key={i}>Child {i + 1} age<input type="number" min="0" max="17" value={age} onChange={e => setChildren(children.map((a, n) => n === i ? Number(e.target.value) : a))} required={step === 1} /></label>)}</div>}
-        <label>Travel by<select name="transport" defaultValue=""><option value="">Compare flights and trains</option><option value="flight">Flights</option><option value="rail">Trains</option></select></label>
+        <label>Travel by<select name="transport" value={transport ?? ""} onChange={event => setTransport((event.target.value || null) as Brief["transport_mode"])}><option value="">{railAvailable ? "Compare flights and trains" : "Flights"}</option><option value="flight">Flights</option>{railAvailable && <option value="rail">Trains</option>}</select></label>
         <fieldset className="budget"><legend>Your travel style</legend>{([ ["budget", "£", "Keep it cheap", "Dorms and shared bathrooms can be included"], ["value", "££", "Best value", "Balance price, comfort and journey time"], ["comfort", "£££", "Comfort first", "Fewer changes and more comfortable stays"] ] as const).map(([value, price, title, help]) => <label key={value} className={budget === value ? "selected" : ""}><input type="radio" name="budget" value={value} checked={budget === value} onChange={() => setBudget(value)} /><b>{price}</b><span>{title}<small>{help}</small></span></label>)}</fieldset>
         <p className="fine">Travel style changes which options we recommend. It doesn’t guarantee the lowest price.</p>
         <div className="grid-two preference-checks"><label><input type="checkbox" name="private_room" /> Private room required</label><label><input type="checkbox" name="private_bathroom" /> Private bathroom required</label></div>
@@ -141,7 +155,7 @@ export function PlannerForm() {
         <label>Email address<input name="email" type="email" autoComplete="email" required={step === 2} placeholder="you@example.com" /></label>
         <p className="fine">We’ll use this address to send this itinerary once. No account and no marketing. <Link href="/privacy/">How we use your data</Link>.</p>
         <label>Anything else? <span className="muted">Optional</span><textarea name="instructions" maxLength={2000} rows={3} placeholder="Gatwick preferred, step-free stations, no shared rooms…" /></label>
-        <div className="form-review"><strong>Before you start</strong><p>We’ll search from Heathrow, Gatwick, Stansted, Luton or supported St Pancras routes. Your journey to the London departure point and match tickets are outside this plan.</p></div>
+        <div className="form-review"><strong>Before you start</strong><p>{origin === "London" ? "We’ll search from Heathrow, Gatwick, Stansted, Luton or supported St Pancras routes." : railAvailable ? `We’ll search direct flights from ${origin} and dated trains through London and Paris. Allow time to change stations in both cities.` : `We’ll search direct flights from the supported airport near ${origin}.`} Routes and prices depend on what the provider can verify. Your journey to the departure point and match tickets are outside this plan.</p></div>
         <div className="form-actions"><button type="button" className="text-button" onClick={() => moveTo(1)}>← Back</button><button className="primary" disabled={!selected.length || busy}>{busy ? "Starting your session…" : "Plan my away days →"}</button></div>
       </section>
     </fieldset>

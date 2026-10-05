@@ -14,6 +14,7 @@ vi.mock("../lib/api", async importOriginal => ({
 const snapshot: Snapshot = {
   development_mode: false,
   public_session_id: "example",
+  origin_city: "London",
   state_revision: 1,
   phase: "draft_ready",
   progress_message: "Your draft is ready.",

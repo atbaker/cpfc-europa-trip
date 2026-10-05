@@ -39,6 +39,7 @@ class Window(Record):
 
 class Brief(Record):
     fixture_ids: tuple[str, ...] = Field(min_length=1, max_length=4)
+    origin_city: str = Field("London", min_length=2, max_length=50)
     travellers: Party = Party()
     budget_tier: Literal["budget", "value", "comfort"] = "value"
     flexibility: Literal["tight", "day_either_side", "two_days"] = "day_either_side"
@@ -280,6 +281,7 @@ Phase = Literal[
 class Snapshot(Record):
     development_mode: bool = False
     public_session_id: UUID
+    origin_city: str = "London"
     state_revision: int = 0
     phase: Phase = "created"
     progress_message: str = "Checking routes from London…"

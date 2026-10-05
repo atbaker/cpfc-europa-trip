@@ -162,6 +162,11 @@ export interface components {
             /** Fixture Ids */
             fixture_ids: string[];
             /**
+             * Origin City
+             * @default London
+             */
+            origin_city: string;
+            /**
              * @default {
              *       "adults": 1,
              *       "child_ages": [],
@@ -504,6 +509,11 @@ export interface components {
              * Format: uuid
              */
             public_session_id: string;
+            /**
+             * Origin City
+             * @default London
+             */
+            origin_city: string;
             /**
              * State Revision
              * @default 0

@@ -18,7 +18,7 @@ export function stageFor(
   return "preferences";
 }
 
-export function tickerLines(stage: Stage, city?: string): string[] {
+export function tickerLines(stage: Stage, city?: string, origin = "London"): string[] {
   if (stage === "preferences") return [
     "Checking your travel preferences…",
     "Looking at your matchday plans…",
@@ -27,7 +27,7 @@ export function tickerLines(stage: Stage, city?: string): string[] {
   if (stage === "done") return ["Your route is ready."];
   if (stage === "failed") return ["We couldn’t complete this trip request."];
   return [
-    "Comparing routes from London…",
+    `Comparing routes from ${origin}…`,
     "Checking journey times…",
     city ? `Comparing places to stay in ${city}…` : "Comparing places to stay…",
     "Weighing price vs. journey time…",
