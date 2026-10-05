@@ -221,6 +221,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             )
             used = 0
             batches: dict[str, list[SearchBatch]] = {f.id: [] for f in self.data.fixtures}
+            flight_batches: list[SearchBatch] = []
             by_fixture = {
                 f.id: [s for s in specs if s.fixture.id == f.id] for f in self.data.fixtures
             }
@@ -234,7 +235,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
 
             async def acquire_job(
                 key: str, kind: str, spec: SearchSpec, cap: int
-            ) -> tuple[str, str, SearchBatch, int, bool]:
+            ) -> tuple[str, str, str, SearchBatch, int, bool]:
                 name = (
                     "search_stays"
                     if kind == "stay"
@@ -258,7 +259,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     except Exception:
                         response = SearchBatch(gaps=("This travel search could not be completed.",))
                         known_calls = False
-                return key, spec.fixture.id, response, cap, known_calls
+                return key, kind, spec.fixture.id, response, cap, known_calls
 
             trips: tuple[Trip, ...] = ()
             for wave_index, wave in enumerate(waves):
@@ -271,7 +272,10 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                 for spec in wave:
                     for kind in (spec.route.mode, "stay"):
                         if self.data.planner_mode == "recorded":
-                            batches[spec.fixture.id].append(sample(spec, kind))
+                            response = sample(spec, kind)
+                            batches[spec.fixture.id].append(response)
+                            if kind == "flight":
+                                flight_batches.append(response)
                             continue
                         key = fingerprint(
                             (
@@ -290,7 +294,10 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                             continue
                         seen.add(key)
                         if key in self.search_cache:
-                            batches[spec.fixture.id].append(self.search_cache[key])
+                            response = self.search_cache[key]
+                            batches[spec.fixture.id].append(response)
+                            if kind == "flight":
+                                flight_batches.append(response)
                             continue
                         cap = REQUEST_CAPS[kind]
                         if (
@@ -301,7 +308,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                         used += cap
                         self.search_reserved += cap
                         jobs.append((key, kind, spec, cap))
-                responses: list[tuple[str, str, SearchBatch, int, bool]] = []
+                responses: list[tuple[str, str, str, SearchBatch, int, bool]] = []
                 timed_out = False
                 if jobs:
                     tasks = [asyncio.create_task(acquire_job(*job)) for job in jobs]
@@ -315,7 +322,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                         await asyncio.gather(*pending, return_exceptions=True)
                         timed_out = True
                     responses = [task.result() for task in tasks if task in done]
-                for key, fixture_id, response, cap, known_calls in responses:
+                for key, kind, fixture_id, response, cap, known_calls in responses:
                     if known_calls:
                         unused = cap - min(cap, response.calls)
                         used -= unused
@@ -323,6 +330,8 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     if response.journeys or response.stays:
                         self.search_cache[key] = response
                     batches[fixture_id].append(response)
+                    if kind == "flight":
+                        flight_batches.append(response)
                 trips = tuple(
                     choose(f, batches[f.id], effective, self.data.routes, intent)
                     for f in self.data.fixtures
@@ -333,13 +342,21 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                 if (
                     specs
                     and all(spec.route.mode == "flight" for spec in specs)
-                    and any(
-                        "No nonstop flights were found" in gap
-                        for fixture_batches in batches.values()
-                        for batch in fixture_batches
-                        for gap in batch.gaps
+                    and flight_batches
+                    and all(
+                        not batch.journeys
+                        and any("No nonstop flights were found" in gap for gap in batch.gaps)
+                        for batch in flight_batches
                     )
                 ):
+                    onward = specs[0].route.onward_stations
+                    destination = onward[0] if onward else self.data.fixtures[0].city
+                    connection = (
+                        f" A flight to {destination} is needed before the train to "
+                        f"{self.data.fixtures[0].city}."
+                        if onward
+                        else ""
+                    )
                     alternatives = (
                         "Try trains, different travel dates or another starting city."
                         if any(route.mode == "rail" for route in self.data.routes)
@@ -347,7 +364,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     )
                     raise NoCompleteTrip(
                         f"No nonstop flights were found from {self.brief.origin_city} to "
-                        f"{self.data.fixtures[0].city} on the dates searched. " + alternatives
+                        f"{destination} on the dates searched.{connection} " + alternatives
                     )
                 raise ValueError("No valid draft")
             new_itinerary = Itinerary(

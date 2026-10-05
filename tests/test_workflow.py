@@ -116,13 +116,30 @@ async def test_no_draft_sends_failure_notice(environment, session_input):
     assert result.phase == "failed" and result.email_kind == "failure_notice" and len(emails) == 1
 
 
+@pytest.mark.parametrize(
+    ("origin", "fixture_id", "destination", "suggest_trains", "mixed_failure"),
+    [
+        ("Edinburgh", "uel-2026-lyon-away", "Lyon", True, False),
+        ("Nottingham", "uel-2026-jagiellonia-away", "Warsaw", False, False),
+        ("Nottingham", "uel-2026-jagiellonia-away", "Warsaw", False, True),
+    ],
+)
 async def test_no_nonstop_flights_explains_failed_city_search(
-    environment, session_input, monkeypatch
+    environment,
+    session_input,
+    monkeypatch,
+    origin,
+    fixture_id,
+    destination,
+    suggest_trains,
+    mixed_failure,
 ):
     import json
+    from datetime import UTC, datetime
 
     from google.genai.types import GenerateContentResponse
 
+    from cpfc_trip.catalog import load_catalog, validate_brief
     from cpfc_trip.domain import SearchBatch, SearchSpec
     from cpfc_trip.origins import routes_for_origin
     from cpfc_trip.planner.agent import model
@@ -145,8 +162,16 @@ async def test_no_nonstop_flights_explains_failed_city_search(
 
     monkeypatch.setattr(model.client.aio.models, "generate_content", intent)
 
+    flight_calls = 0
+
     @activity.defn(name="search_flights")
     async def flights(spec: SearchSpec) -> SearchBatch:
+        nonlocal flight_calls
+        flight_calls += 1
+        if mixed_failure and flight_calls == 2:
+            return SearchBatch(
+                gaps=("No complete flight and Warsaw–Białystok train connection was verified.",)
+            )
         return SearchBatch(gaps=("No nonstop flights were found for this route and date pair.",))
 
     @activity.defn(name="search_stays")
@@ -157,12 +182,22 @@ async def test_no_nonstop_flights_explains_failed_city_search(
     async def deliver(state: Snapshot) -> str:
         return "test-email"
 
+    fixtures, catalog_routes = load_catalog()
+    fixture = next(item for item in fixtures if item.id == fixture_id)
     brief = session_input.brief.model_copy(
-        update={"origin_city": "Edinburgh", "transport_mode": "flight"}
+        update={
+            "origin_city": origin,
+            "transport_mode": "flight",
+            "fixture_ids": (fixture_id,),
+            "windows": (),
+        }
     )
-    routes = routes_for_origin(session_input.routes, "Edinburgh")
+    brief = validate_brief(brief, (fixture,), datetime.now(UTC))
+    routes = routes_for_origin(
+        tuple(route for route in catalog_routes if route.fixture_id == fixture_id), origin
+    )
     value = session_input.model_copy(
-        update={"brief": brief, "routes": routes, "planner_mode": "live"}
+        update={"brief": brief, "fixtures": (fixture,), "routes": routes, "planner_mode": "live"}
     )
     queue = str(uuid4())
     async with Worker(
@@ -175,10 +210,17 @@ async def test_no_nonstop_flights_explains_failed_city_search(
             Workflow.run, value, id=str(uuid4()), task_queue=queue
         )
     assert result.phase == "failed" and result.email_kind == "failure_notice"
+    if mixed_failure:
+        assert "No nonstop flights" not in result.transcript_tail[-1].content
+        assert "couldn't find a complete trip" in result.transcript_tail[-1].content
+        return
     assert (
-        "No nonstop flights were found from Edinburgh to Lyon" in result.transcript_tail[-1].content
+        f"No nonstop flights were found from {origin} to {destination}"
+        in result.transcript_tail[-1].content
     )
-    assert "Try trains" in result.transcript_tail[-1].content
+    assert ("Try trains" in result.transcript_tail[-1].content) is suggest_trains
+    if destination == "Warsaw":
+        assert "train to Białystok" in result.transcript_tail[-1].content
 
 
 async def test_durable_pydantic_model_and_query_during_activity(

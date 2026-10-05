@@ -1,5 +1,11 @@
 # Development notes
 
+## 5 October 2026 — Nottingham to Białystok session diagnosis
+
+- Temporal execution `e7b61f5a-4ba5-4d02-8f12-63a84dafa708` completed after about 59 seconds with no itinerary. Three SearchApi nonstop flight searches from East Midlands (EMA) to Warsaw (WAW), for 9–11, 9–10 and 10–11 December 2026, each returned an explicit no-results response. Accommodation results were found; without the flight, the onward Warsaw–Białystok train could not form a complete trip. The failure email was a local preview, with no external send.
+- The saved explanation incorrectly said no flights to Białystok. The workflow now names the actual flight gateway, Warsaw, and explains the onward train. It uses that specific message only when all completed flight searches returned no nonstop results; mixed failures retain the general complete-trip message. The completed session itself is unchanged, so a new brief is needed to retry another city or dates.
+- Focused workflow regressions passed for direct Lyon, onward Warsaw and mixed-result failures. The full Python suite passed with 77 tests and two PostgreSQL tests skipped because no test database was configured; Ruff lint and mypy passed. No new paid provider search was run for this diagnosis.
+
 ## 5 October 2026 — form transition visibility follow-up
 
 - The supplied 11-second Firefox recording shows the form moving from match selection to travel preferences and then contact details. A brief faded frame appears during the first change, but the original 4 px, 250 ms reveal is hard to notice while the page scrolls to the next heading.
