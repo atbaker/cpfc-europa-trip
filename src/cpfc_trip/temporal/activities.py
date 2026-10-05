@@ -1,9 +1,11 @@
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -11,23 +13,46 @@ from cpfc_trip.domain import SearchBatch, SearchSpec, Snapshot
 from cpfc_trip.emailing import render
 from cpfc_trip.persistence.models import DeliveryRow, SessionRow
 from cpfc_trip.persistence.repository import Repository, digest
+from cpfc_trip.persistence.search_cache import SearchCache, SearchMode
 from cpfc_trip.planner.providers.searchapi import acquire
 from cpfc_trip.resend import send
 
 
-@activity.defn
-async def search_flights(spec: SearchSpec) -> SearchBatch:
-    return await acquire(spec, "flight")
+class SearchActivities:
+    """Search with a shared, best-effort cache before contacting paid providers."""
 
+    def __init__(self, cache: SearchCache) -> None:
+        self.cache = cache
 
-@activity.defn
-async def search_trains(spec: SearchSpec) -> SearchBatch:
-    return await acquire(spec, "rail")
+    async def _search(self, spec: SearchSpec, mode: SearchMode) -> SearchBatch:
+        try:
+            async with asyncio.timeout(1):
+                cached = await self.cache.get(spec, mode)
+            if cached is not None:
+                return cached
+        except (SQLAlchemyError, TimeoutError):
+            logging.warning("Shared search cache read failed", exc_info=True)
+        result = await acquire(spec, mode)
+        has_results = bool(result.stays if mode == "stay" else result.journeys)
+        if has_results:
+            try:
+                async with asyncio.timeout(1):
+                    await self.cache.put(spec, mode, result)
+            except (SQLAlchemyError, TimeoutError):
+                logging.warning("Shared search cache write failed", exc_info=True)
+        return result
 
+    @activity.defn(name="search_flights")
+    async def search_flights(self, spec: SearchSpec) -> SearchBatch:
+        return await self._search(spec, "flight")
 
-@activity.defn
-async def search_stays(spec: SearchSpec) -> SearchBatch:
-    return await acquire(spec, "stay")
+    @activity.defn(name="search_trains")
+    async def search_trains(self, spec: SearchSpec) -> SearchBatch:
+        return await self._search(spec, "rail")
+
+    @activity.defn(name="search_stays")
+    async def search_stays(self, spec: SearchSpec) -> SearchBatch:
+        return await self._search(spec, "stay")
 
 
 class DeliveryActivities:

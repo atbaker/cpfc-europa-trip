@@ -27,11 +27,6 @@ with workflow.unsafe.imports_passed_through():
     from cpfc_trip.planner.planning import choose, enumerate_specs
     from cpfc_trip.planner.providers.searchapi import REQUEST_CAPS, fingerprint
     from cpfc_trip.planner.recorded import sample
-    from cpfc_trip.temporal.activities import (
-        search_flights,
-        search_stays,
-        search_trains,
-    )
 
 
 class UnsupportedRequirements(Exception):
@@ -218,7 +213,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                 for spec in specs
                 if not intent.transport_mode or spec.route.mode == intent.transport_mode
             ]
-            # Cache is bounded session-local workflow state, never a separate price/progress store.
+            # Session-local reuse complements the shared 24-hour Activity cache.
             allowance = (
                 self.data.limits.search_initial if initial else self.data.limits.search_follow_up
             )
@@ -238,18 +233,19 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             async def acquire_job(
                 key: str, kind: str, spec: SearchSpec, cap: int
             ) -> tuple[str, str, SearchBatch, int, bool]:
-                fn = (
-                    search_stays
+                name = (
+                    "search_stays"
                     if kind == "stay"
-                    else search_flights
+                    else "search_flights"
                     if kind == "flight"
-                    else search_trains
+                    else "search_trains"
                 )
                 async with semaphore:
                     try:
                         response = await workflow.execute_activity(
-                            fn,
+                            name,
                             spec,
+                            result_type=SearchBatch,
                             start_to_close_timeout=timedelta(seconds=85),
                             schedule_to_close_timeout=timedelta(seconds=90),
                             # A paid request may have completed before worker loss. Do not replay

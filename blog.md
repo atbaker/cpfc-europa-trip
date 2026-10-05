@@ -1,5 +1,10 @@
 # Development notes
 
+## 5 October 2026 — shared travel result cache
+
+- Added a PostgreSQL-backed, 24-hour cache for successful normalized SearchApi results. Transport keys include fixture, full route, dates, mode and party; hotel keys use destination city, dates, party, budget and room preferences. Failed or empty results are not shared. Cache hits count as zero new provider calls and keep original quote observation timestamps; database failures fall through to the provider. Expired rows are removed on successful writes. The earlier proposed five-minute TTL was changed to 24 hours at user request.
+- The worker now owns cache-backed search Activities under the existing Temporal Activity names. Added a migration and updated the example-plan copy because new plans can reuse recent results. The full `scripts/check.sh` gate passed: 69 Python tests, two PostgreSQL tests skipped without a configured test database, 18 frontend tests, Ruff, mypy, generated API schema comparison, TypeScript, ESLint and static build. Focused tests checked expiry, key isolation, reuse across two cache instances and cache-failure fallback. The local migration completed and the worker was restarted. No paid provider search was run for this change. Commercial permission for 24-hour caching remains unverified for public launch.
+
 ## 5 October 2026 — arrow font and select spacing
 
 - Self-hosted Inter through Next font and scoped it to directional arrow glyphs; body copy retains its existing font. Replaced native select carets with decorative Inter chevrons and used one shared select wrapper with 16px left padding, 48px right padding, and a 16px caret inset. The decorative chevrons are hidden from accessibility labels.

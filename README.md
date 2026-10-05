@@ -80,6 +80,13 @@ scripts/dev/preview.sh worker
 These commands override planning/email modes only for their own processes. Do not run the
 normal API/worker alongside them on the same ports/task queue.
 
+Live provider results are shared by workers through a PostgreSQL cache for 24 hours.
+Transport entries are keyed by the reviewed route, dates, travel mode and party; hotel
+entries use city, dates, party and room/budget preferences. The app shows each quote's
+original checked time. Empty or failed searches are retried, and cache errors fall back to
+the provider. Run `uv run --locked cpfc-db upgrade` before restarting an existing worker
+after pulling this change.
+
 ## Enable live planning
 
 Only the reviewed Lyon destination route is enabled: direct flights from supported UK airport cities to LYS, plus rail through London and Paris from London, Birmingham, Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle,
