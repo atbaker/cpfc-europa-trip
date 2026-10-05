@@ -1,5 +1,11 @@
 # Development notes
 
+## 5 October 2026 — form transitions and home-page cleanup
+
+- Added a 250 ms fade and 4 px upward reveal when a trip-brief section becomes visible. It reuses the existing animation and respects the existing reduced-motion rule. The form sections remain mounted so choices persist while moving forward and back.
+- Removed the dated illustrative itinerary from the home page and deleted its unused CSS, including the mobile-only hide rule. Desktop and mobile visitors now see the same home-page content.
+- Frontend validation passed: 18 tests, TypeScript, ESLint and static production build. Browser inspection confirmed all three form sections via keyboard navigation, the applied animation rule and no illustrative itinerary in the page.
+
 ## 5 October 2026 — code quality and route validation
 
 - Fixed an API validation error: a rail-only brief for Istanbul, Białystok or Salzburg previously passed because the catalog also contained Lyon rail routes. Validation now requires an enabled rail route for every selected match from the selected origin; six London/Manchester regression cases cover the three flight-only matches.
