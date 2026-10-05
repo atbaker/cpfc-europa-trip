@@ -84,7 +84,7 @@ small { display: block; }
 .step-number { display: grid; place-items: center; flex: 0 0 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); }
 .form-progress li[aria-current] .step-number { background: var(--red); border-color: var(--red); color: #fff; }
 .form-progress li.complete .step-number { background: var(--blue); border-color: var(--blue); color: #fff; }
-.form-page:not([hidden]) { animation: cpfc-fade .25s ease-out; }
+.form-page:not([hidden]) { animation: form-step-enter .42s .08s cubic-bezier(.2, .7, .2, 1) both; }
 .form-page h2 { margin-bottom: 10px; }
 .form-page h2:focus { outline: none; }
 .form-help { margin-bottom: var(--space-3); color: var(--muted); font-size: 15px; }
@@ -162,6 +162,7 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .send-bar .primary { flex-shrink: 0; }
 
 /* The waiting illustration is decorative; the visually hidden status is the live region. */
+@keyframes form-step-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes cpfc-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes cpfc-pulse { 50% { opacity: .55; } }
 @keyframes cpfc-route { to { stroke-dashoffset: -120; } }

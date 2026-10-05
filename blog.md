@@ -1,5 +1,11 @@
 # Development notes
 
+## 5 October 2026 — form transition visibility follow-up
+
+- The supplied 11-second Firefox recording shows the form moving from match selection to travel preferences and then contact details. A brief faded frame appears during the first change, but the original 4 px, 250 ms reveal is hard to notice while the page scrolls to the next heading.
+- Increased the section reveal to 16 px over 420 ms with an 80 ms delay so it remains visible after the step change. The existing reduced-motion rule still disables it when requested by the device. The browser applied the updated animation rule and displayed the next section after keyboard navigation.
+- The frontend check passed: 18 tests, TypeScript, ESLint and static production build. This is a local visual adjustment; it has not been re-recorded in Firefox after the change.
+
 ## 5 October 2026 — form transitions and home-page cleanup
 
 - Added a 250 ms fade and 4 px upward reveal when a trip-brief section becomes visible. It reuses the existing animation and respects the existing reduced-motion rule. The form sections remain mounted so choices persist while moving forward and back.
