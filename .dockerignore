@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+.data
+.venv
+frontend/.next
+frontend/node_modules
+frontend/out
+node_modules
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+*.pyc
+*.tsbuildinfo

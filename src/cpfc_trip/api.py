@@ -13,6 +13,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -87,7 +88,7 @@ def create_app(
             await db.dispose()
 
     app = FastAPI(title="Eagles Away", version="0.1.0", lifespan=lifespan)
-    if config.app_env != "production":
+    if config.app_env in {"development", "test"}:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=[config.frontend_origin],
@@ -188,7 +189,7 @@ def create_app(
             f"cpfc_{data.public_session_id}",
             token,
             httponly=True,
-            secure=config.app_env == "production",
+            secure=config.app_env in {"preview", "production"},
             samesite="lax",
             path=f"/api/sessions/{data.public_session_id}",
         )
@@ -305,6 +306,9 @@ def create_app(
         except Exception:
             raise HTTPException(503, "Dependencies are not ready") from None
         return {"ok": True}
+
+    if config.static_export_dir:
+        app.mount("/", StaticFiles(directory=config.static_export_dir, html=True), name="frontend")
 
     return app
 

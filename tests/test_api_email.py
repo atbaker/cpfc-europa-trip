@@ -197,3 +197,42 @@ async def test_api_auth_polling_204_and_csrf(
         response = await client.get(f"/api/sessions/{sid}/snapshot")
         assert response.status_code == 503
         assert "sensitive" not in response.text
+
+
+async def test_preview_serves_export_and_uses_secure_session_cookie(
+    settings: Settings, session_input: SessionInput, tmp_path
+) -> None:
+    """A hosted preview serves static pages and keeps session access on HTTPS."""
+    export = tmp_path / "out"
+    (export / "plan").mkdir(parents=True)
+    (export / "index.html").write_text("<h1>Eagles Away preview</h1>")
+    (export / "plan" / "index.html").write_text("<h1>Your plan</h1>")
+    preview = settings.model_copy(
+        update={
+            "app_env": "preview",
+            "frontend_origin": "https://preview.example",
+            "static_export_dir": str(export),
+        }
+    )
+    repository = AsyncMock()
+    repository.create.return_value = session_input
+    temporal = AsyncMock()
+    app = create_app(preview, repository, temporal)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="https://preview.example") as client,
+    ):
+        assert "Eagles Away preview" in (await client.get("/")).text
+        assert "Your plan" in (await client.get("/plan/")).text
+        assert (await client.get("/api/catalog")).status_code == 200
+        response = await client.post(
+            "/api/sessions",
+            json={
+                "submission_id": str(uuid4()),
+                "email": "supporter@example.com",
+                "brief": session_input.brief.model_dump(mode="json"),
+            },
+            headers={"Origin": "https://preview.example", "X-Submission-Token": "x" * 64},
+        )
+        assert response.status_code == 202
+        assert "Secure" in response.headers["set-cookie"]

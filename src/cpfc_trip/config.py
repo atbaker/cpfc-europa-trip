@@ -6,8 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    app_env: Literal["development", "test", "production"] = "development"
+    app_env: Literal["development", "test", "preview", "production"] = "development"
     frontend_origin: str = "http://localhost:3000"
+    static_export_dir: str = ""
     database_url: str = "postgresql+asyncpg://cpfc:cpfc@localhost:5432/cpfc"
     contact_encryption_key: SecretStr = SecretStr("")
     session_secret: SecretStr = SecretStr("")

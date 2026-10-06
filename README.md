@@ -10,6 +10,30 @@ The Next.js frontend polls authenticated Temporal snapshots through FastAPI. Use
 frozen itinerary with direct travel links; the app does not book travel or sell match tickets.
 The domain is **eaglesaway.com**; the verified transactional sender uses **notifications.eaglesaway.com**.
 
+## Private cloud preview
+
+The first cloud release is planned for the dedicated `cpfc-europa-trip-prod` GCP project, behind
+Cloud Run Identity-Aware Proxy. It will use its generated `run.app` address and leave
+`eaglesaway.com` unchanged. See the [deployment readiness record](planning/2026-10-06-deployment-readiness.md)
+for the verified prerequisites and open decisions. No cloud deployment has been completed yet.
+
+`Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
+requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
+serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
+`cpfc-worker` as a Cloud Run worker pool command. Preview email mode must remain `preview`.
+Build and smoke-test locally without placing `.env` files in the image:
+
+```bash
+docker build -f Dockerfile.preview -t eagles-away:preview .
+docker run --rm --entrypoint python eagles-away:preview -c \
+  'from cpfc_trip.api import create_app; print(create_app().title)'
+```
+
+The preview also needs a migrated Cloud SQL database, Secret Manager values for encryption,
+sessions, SearchAPI and Temporal Cloud, a worker pool, and Gemini access through its runtime
+service account. Set `FRONTEND_ORIGIN` to the exact IAP-protected service origin so POST
+requests pass the origin check. The container image alone does not provide a working trip flow.
+
 ## Start locally
 
 Run commands from the repository root. Install these tools first:
