@@ -29,7 +29,7 @@ from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import money
 
 ENDPOINT = "https://www.searchapi.io/api/v1/search"
-REQUEST_CAPS = {"flight": 6, "rail": 8, "stay": 8}
+REQUEST_CAPS = {"flight": 8, "rail": 8, "stay": 8}
 
 
 class ProviderError(Exception):
@@ -172,24 +172,59 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
     legs: list[tuple[Leg, ...]] = []
     for index, direction in enumerate(selected):
         flights = direction.get("flights", [])
-        # Intermediate airport timezones need an airport catalog. Until reviewed, refuse connections.
-        if len(flights) != 1:
-            return SearchBatch(
-                gaps=("Connecting-flight airport timezones require further evidence.",)
-            )
-        flight = flights[0]
-        dep, arr = flight["departure_airport"], flight["arrival_airport"]
-        london = spec.route.origin.split(",")
+        if not 1 <= len(flights) <= 2:
+            return SearchBatch(gaps=("Only nonstop and one-stop flights are supported.",))
+        dep, arr = flights[0]["departure_airport"], flights[-1]["arrival_airport"]
+        origin_airports = spec.route.origin.split(",")
         if index == 0:
-            valid = dep["id"] in london and arr["id"] == spec.route.destination
+            valid = dep["id"] in origin_airports and arr["id"] == spec.route.destination
             dep_tz, arr_tz = "Europe/London", spec.route.destination_timezone
         else:
-            valid = dep["id"] == spec.route.destination and arr["id"] in london
+            valid = dep["id"] == spec.route.destination and arr["id"] in origin_airports
             dep_tz, arr_tz = spec.route.destination_timezone, "Europe/London"
         if not valid or dep.get("date") != str(
             spec.outbound_date if index == 0 else spec.return_date
         ):
             return SearchBatch(gaps=("Returned airports did not match the catalog route.",))
+        caveats = ["Select and confirm this itinerary on Google Flights."]
+        if len(flights) == 2:
+            connection_arrival = flights[0]["arrival_airport"]
+            connection_departure = flights[1]["departure_airport"]
+            connection = connection_arrival.get("id")
+            durations = [flight.get("duration") for flight in flights]
+            if (
+                not connection
+                or connection != connection_departure.get("id")
+                or any(not isinstance(duration, int) or duration <= 0 for duration in durations)
+            ):
+                return SearchBatch(gaps=("The flight connection could not be verified.",))
+            arrival_local = datetime.fromisoformat(
+                f"{connection_arrival['date']}T{connection_arrival['time']}"
+            )
+            departure_local = datetime.fromisoformat(
+                f"{connection_departure['date']}T{connection_departure['time']}"
+            )
+            first_arrival = local_time(dep, dep_tz).astimezone(UTC) + timedelta(
+                minutes=durations[0]
+            )
+            second_departure = local_time(arr, arr_tz).astimezone(UTC) - timedelta(
+                minutes=durations[1]
+            )
+            layover_minutes = round((second_departure - first_arrival).total_seconds() / 60)
+            reported = direction.get("layovers") or []
+            if (
+                departure_local <= arrival_local
+                or not 60 <= layover_minutes <= 480
+                or len(reported) != 1
+                or reported[0].get("id") != connection
+                or not isinstance(reported[0].get("duration"), int)
+                or abs(reported[0]["duration"] - layover_minutes) > 10
+            ):
+                return SearchBatch(gaps=("The flight connection could not be verified.",))
+            caveats.insert(
+                0,
+                f"One stop via {connection} ({layover_minutes} minutes). Confirm the connection, baggage and terminal details before booking.",
+            )
         legs.append(
             (
                 Leg(
@@ -199,11 +234,13 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
                     destination=arr["id"],
                     departs_at=local_time(dep, dep_tz),
                     arrives_at=local_time(arr, arr_tz),
-                    operator=flight["airline"],
-                    service_number=flight.get("flight_number", ""),
+                    operator=" / ".join(dict.fromkeys(flight["airline"] for flight in flights)),
+                    service_number=" / ".join(
+                        flight.get("flight_number", "") for flight in flights
+                    ),
                     offer=ref,
                     quote=quote,
-                    caveats=("Select and confirm this itinerary on Google Flights.",),
+                    caveats=tuple(caveats),
                 ),
             )
         )
@@ -212,9 +249,7 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
     )
 
 
-async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
-    if any(a < 2 for a in spec.party.child_ages):
-        return SearchBatch(gaps=("Infant flight pricing is not yet supported.",))
+async def _search_flights_for_stops(api: SearchApi, spec: SearchSpec, stops: str) -> SearchBatch:
     p = dict(
         engine="google_flights",
         departure_id=spec.route.origin,
@@ -222,7 +257,7 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         outbound_date=str(spec.outbound_date),
         return_date=str(spec.return_date),
         flight_type="round_trip",
-        stops="nonstop",
+        stops=stops,
         adults=spec.party.adults,
         children=len(spec.party.child_ages),
         currency="GBP",
@@ -234,7 +269,9 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
     except NoResultsError:
         return SearchBatch(
             calls=api.calls,
-            gaps=("No nonstop flights were found for this route and date pair.",),
+            gaps=(
+                f"No {stops.replace('_', ' ')} flights were found for this route and date pair.",
+            ),
         )
     onward = spec.route.onward_stations == ("Warsaw", "Białystok")
     choices = [
@@ -317,6 +354,26 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
             if onward
             else ("No complete flight result was verified.",)
         ),
+    )
+
+
+async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
+    if any(a < 2 for a in spec.party.child_ages):
+        return SearchBatch(gaps=("Infant flight pricing is not yet supported.",))
+    direct = await _search_flights_for_stops(api, spec, "nonstop")
+    if direct.journeys:
+        return direct
+    if api.calls >= api.limit or asyncio.get_running_loop().time() >= api.deadline:
+        return SearchBatch(
+            calls=api.calls,
+            gaps=("No complete flight was verified within the search limits.",),
+        )
+    connected = await _search_flights_for_stops(api, spec, "one_stop_or_fewer")
+    if connected.journeys:
+        return connected
+    return SearchBatch(
+        calls=api.calls,
+        gaps=("No nonstop or suitable one-stop flights were found for this route and date pair.",),
     )
 
 

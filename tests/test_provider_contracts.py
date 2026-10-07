@@ -64,6 +64,77 @@ def test_selected_city_airports_gate_returned_flights(session_input):
     assert result.journeys[0].inbound[0].destination == "MAN"
 
 
+def connecting_booking():
+    raw = data("flight-booking")
+    outward, home = raw["selected_flights"]
+    outward["flights"] = [
+        {
+            **outward["flights"][0],
+            "departure_airport": {"id": "LGW", "date": "2026-10-04", "time": "08:00"},
+            "arrival_airport": {"id": "AMS", "date": "2026-10-04", "time": "10:15"},
+            "duration": 75,
+            "airline": "KLM",
+            "flight_number": "KL 1001",
+        },
+        {
+            **outward["flights"][0],
+            "departure_airport": {"id": "AMS", "date": "2026-10-04", "time": "11:45"},
+            "arrival_airport": {"id": "LYS", "date": "2026-10-04", "time": "13:15"},
+            "duration": 90,
+            "airline": "KLM",
+            "flight_number": "KL 1002",
+        },
+    ]
+    home["flights"] = [
+        {
+            **home["flights"][0],
+            "departure_airport": {"id": "LYS", "date": "2026-10-06", "time": "10:00"},
+            "arrival_airport": {"id": "AMS", "date": "2026-10-06", "time": "11:30"},
+            "duration": 90,
+            "airline": "KLM",
+            "flight_number": "KL 1003",
+        },
+        {
+            **home["flights"][0],
+            "departure_airport": {"id": "AMS", "date": "2026-10-06", "time": "13:00"},
+            "arrival_airport": {"id": "LGW", "date": "2026-10-06", "time": "13:15"},
+            "duration": 75,
+            "airline": "KLM",
+            "flight_number": "KL 1004",
+        },
+    ]
+    outward["layovers"] = home["layovers"] = [{"id": "AMS", "duration": 90}]
+    return raw
+
+
+def test_one_stop_round_trip_keeps_connection_and_one_price(session_input):
+    chosen = spec(session_input)
+    result = normalize_flights(connecting_booking(), chosen, CHECKED)
+    journey = result.journeys[0]
+    assert len(journey.outbound) == len(journey.inbound) == 1
+    assert journey.outbound[0].origin == "LGW"
+    assert journey.outbound[0].destination == "LYS"
+    assert "AMS" in journey.outbound[0].caveats[0]
+    assert "KL 1001" in journey.outbound[0].service_number
+    assert "KL 1002" in journey.outbound[0].service_number
+    assert (
+        total([journey.outbound[0].quote, journey.inbound[0].quote], chosen.party)[0].minor_units
+        == 14800
+    )
+
+
+@pytest.mark.parametrize("change", ["wrong_airport", "short_layover", "wrong_duration"])
+def test_one_stop_requires_supported_connection_evidence(session_input, change):
+    raw = connecting_booking()
+    if change == "wrong_airport":
+        raw["selected_flights"][0]["flights"][1]["departure_airport"]["id"] = "FRA"
+    elif change == "short_layover":
+        raw["selected_flights"][0]["flights"][1]["duration"] = 130
+    else:
+        raw["selected_flights"][0]["layovers"][0]["duration"] = 200
+    assert not normalize_flights(raw, spec(session_input), CHECKED).journeys
+
+
 def test_hotel_price_tax_and_exact_room_identity(session_input):
     search = data("hotels")
     s = spec(session_input)
@@ -255,9 +326,66 @@ async def test_no_nonstop_flights_has_specific_gap(session_input, settings):
             settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
         )
         result = await search_flights(api, spec(session_input))
-    assert result.calls == 1
+    assert result.calls == 2
     assert not result.journeys
-    assert result.gaps == ("No nonstop flights were found for this route and date pair.",)
+    assert result.gaps == (
+        "No nonstop or suitable one-stop flights were found for this route and date pair.",
+    )
+
+
+async def test_one_stop_search_only_after_nonstop_is_empty(session_input, settings):
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import search_flights
+
+    calls: list[httpx.QueryParams] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.params)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"error": "Google Flights didn't return any results."})
+        if len(calls) == 2:
+            return httpx.Response(200, json={"best_flights": [{"departure_token": "out"}]})
+        if len(calls) == 3:
+            return httpx.Response(200, json={"best_flights": [{"booking_token": "return"}]})
+        return httpx.Response(200, json=connecting_booking())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+        )
+        result = await search_flights(api, spec(session_input))
+    assert result.calls == 4
+    assert len(result.journeys) == 1
+    assert calls[0]["stops"] == "nonstop"
+    assert all(call["stops"] == "one_stop_or_fewer" for call in calls[1:])
+
+
+async def test_complete_nonstop_trip_does_not_request_connection_search(session_input, settings):
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import search_flights
+
+    calls: list[httpx.QueryParams] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.params)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"best_flights": [{"departure_token": "out"}]})
+        if len(calls) == 2:
+            return httpx.Response(200, json={"best_flights": [{"booking_token": "return"}]})
+        return httpx.Response(200, json=data("flight-booking"))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        api = SearchApi(
+            client,
+            settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")}),
+        )
+        result = await search_flights(api, spec(session_input))
+    assert len(result.journeys) == 1
+    assert result.calls == 3
+    assert all(call["stops"] == "nonstop" for call in calls)
 
 
 async def test_transient_retry_repeats_only_failed_request(settings: Settings) -> None:

@@ -1,5 +1,11 @@
 # Development notes
 
+## 7 October 2026 — connecting-flight fallback
+
+- Temporal session `d695caf9-c53a-4738-9997-16998ee4e858` had no nonstop Manchester–Salzburg flight results for its three January date pairs. The search now tries nonstop flights first and, when no complete flight journey is found, requests options with at most one stop within an eight-call flight budget and the existing search deadline. It validates the connection airport and layover evidence before showing a route; the plan labels the stop and asks travellers to confirm baggage and terminal details.
+- A live SearchApi check for 27–29 January 2027 found a Manchester–Salzburg return via Frankfurt using four provider requests. The quoted round-trip fare was £223 when checked on 7 October; outbound and return layovers were 65 and 185 minutes. Local preview session `f7b7d7e9-2ff6-407a-8228-b0266dbbc94b` reached `draft_ready` and displayed both connected flights, the match and a hotel. The hotel quote was reused from the 24-hour cache. No external email was sent. The original failed session remains unchanged.
+- The full `scripts/check.sh` gate passed: 86 Python and 19 frontend tests, Ruff, mypy, API schema comparison, TypeScript, ESLint and production build. Two PostgreSQL tests were skipped without a configured test database. The completed plan was inspected at mobile and desktop widths without horizontal overflow. Availability, prices, minimum connection time, baggage and terminal changes still require confirmation with the airline before booking.
+
 ## 7 October 2026 — progressive journey preview and consistent plan cards
 
 - Structured first briefs now enter live search without a Gemini request when the optional free-text field is empty. The workflow publishes the first feasible dated return journey while it continues searching for accommodation and alternatives, for at most 30 seconds after that preview and within the existing turn and provider-request limits. A preview is neither committed nor emailed. SearchApi remains the dated flight, hotel and rail source.

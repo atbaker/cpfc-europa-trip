@@ -395,7 +395,10 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     and flight_batches
                     and all(
                         not batch.journeys
-                        and any("No nonstop flights were found" in gap for gap in batch.gaps)
+                        and any(
+                            "No nonstop or suitable one-stop flights were found" in gap
+                            for gap in batch.gaps
+                        )
                         for batch in flight_batches
                     )
                 ):
@@ -413,7 +416,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                         else "Try different travel dates or another starting city."
                     )
                     raise NoCompleteTrip(
-                        f"No nonstop flights were found from {self.brief.origin_city} to "
+                        f"No nonstop or suitable one-stop flights were found from {self.brief.origin_city} to "
                         f"{destination} on the dates searched.{connection} " + alternatives
                     )
                 raise ValueError("No valid draft")

@@ -1,7 +1,7 @@
 # Eagles Away
 
 A UK departure-city travel planner for Crystal Palace supporters, supported by Temporal.
-**Local live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have direct-flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete or deployed.**
+**Local live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete or deployed.**
 Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md) for completed work,
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 
@@ -117,8 +117,9 @@ after pulling this change.
 All four listed away matches have reviewed live search patterns. Lyon offers direct flights
 from supported UK airport cities and rail through London and Paris from London, Birmingham,
 Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle. Istanbul and
-Salzburg offer direct-flight searches; Białystok joins flights to Warsaw with dated direct
-trains. Live pricing currently supports adults sharing one room. Children and multiple rooms
+Salzburg have flight searches; Białystok joins flights to Warsaw with dated direct trains.
+All flight searches try nonstop first, then suitable one-stop flights if needed. Live pricing
+currently supports adults sharing one room. Children and multiple rooms
 remain unsupported. Venue and match-specific transfers still need checks; quotes are planning
 estimates with missing costs explicitly disclosed.
 The form defaults to London. Choose another city from the UK dropdown to search its supported

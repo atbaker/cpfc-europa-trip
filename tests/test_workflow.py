@@ -150,7 +150,11 @@ async def test_no_nonstop_flights_explains_failed_city_search(
             return SearchBatch(
                 gaps=("No complete flight and Warsaw–Białystok train connection was verified.",)
             )
-        return SearchBatch(gaps=("No nonstop flights were found for this route and date pair.",))
+        return SearchBatch(
+            gaps=(
+                "No nonstop or suitable one-stop flights were found for this route and date pair.",
+            )
+        )
 
     @activity.defn(name="search_stays")
     async def stays(spec: SearchSpec) -> SearchBatch:
@@ -189,11 +193,11 @@ async def test_no_nonstop_flights_explains_failed_city_search(
         )
     assert result.phase == "failed" and result.email_kind == "failure_notice"
     if mixed_failure:
-        assert "No nonstop flights" not in result.transcript_tail[-1].content
+        assert "No nonstop or suitable one-stop flights" not in result.transcript_tail[-1].content
         assert "couldn't find a complete trip" in result.transcript_tail[-1].content
         return
     assert (
-        f"No nonstop flights were found from {origin} to {destination}"
+        f"No nonstop or suitable one-stop flights were found from {origin} to {destination}"
         in result.transcript_tail[-1].content
     )
     assert ("Try trains" in result.transcript_tail[-1].content) is suggest_trains
