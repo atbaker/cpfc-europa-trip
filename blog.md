@@ -1,5 +1,11 @@
 # Development notes
 
+## 7 October 2026 — DigitalOcean private preview live
+
+- The provided `GEMINI_API_KEY` passed a live validity check. The Frankfurt PostgreSQL 17 cluster became online, the initial admin password was rotated, and database `cpfc` was created. A sanitized App Platform spec passed account-backed validation. Automatic approval review rejected an unnecessary validation upload of the secret-bearing spec; the actual deployment submitted runtime secrets to DigitalOcean as required.
+- App Platform deployment `49db73ca-a10d-4e7b-9e6b-4d05e4065934` reached `ACTIVE` with successful build and deploy steps, including the migration job. The protected preview URL is <https://eagles-away-preview-ifemt.ondigitalocean.app/>. `/healthz` returned 200, anonymous `/` returned 401, and authenticated `/`, `/plan/`, and `/api/catalog` returned 200. `eaglesaway.com` DNS was not changed; email remains in preview mode.
+- Hosted live session `e84cb31d-072d-4986-87ee-104d56e0c334` for London–Lyon reached `draft_ready` with one journey, a stay, a partial priced total of GBP 360, and explicit outstanding checks. This verifies one end-to-end path through API, Temporal worker, database, and providers. It does not establish availability or price coverage for every city or match, or a full browser acceptance test.
+
 ## 7 October 2026 — DigitalOcean private-preview preparation
 
 - The owner changed the first hosting target from the unbilled GCP project to DigitalOcean App Platform. A `doctl` account request initially returned HTTP 401; after the owner reconnected the CLI, a dedicated Eagles Away Preview project was created. A smallest-plan PostgreSQL 17 cluster was created in Frankfurt and is still provisioning. No App Platform app or DNS record has been created. The generated DigitalOcean URL is intended to remain a credential-protected private preview, with `EMAIL_MODE=preview` and `eaglesaway.com` unchanged.

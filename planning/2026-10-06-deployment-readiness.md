@@ -6,17 +6,33 @@ This is a dated discovery record for the first cloud deployment. It supplements 
 
 The owner chose DigitalOcean App Platform after the GCP billing block. The `doctl` profile
 initially returned HTTP 401; after reauthentication a dedicated project and Frankfurt
-PostgreSQL 17 cluster were created. The database is still provisioning, and no app or DNS
-record has been created. The preview image builds locally, and a container import verified the
+PostgreSQL 17 cluster were created. The preview image builds locally, and a container import verified the
 static export and API package. `scripts/check.sh` passed after adding a required HTTP Basic
-access gate for `APP_ENV=preview` and DigitalOcean PostgreSQL URL/TLS handling. The hosted
-preview still needs a ready PostgreSQL database, encrypted runtime values, the Temporal worker
-and migrations. The initial DB password appeared in CLI creation output and must be rotated
-before use. The worker now supports `GOOGLE_AUTH_MODE=api_key`, but
-a Gemini API key usable outside the local gcloud profile is still needed for free-text briefs
-and follow-ups. Keep `EMAIL_MODE=preview` and
+access gate for `APP_ENV=preview` and DigitalOcean PostgreSQL URL/TLS handling. The initial
+DB password appeared in CLI creation output and was rotated before deployment. The worker
+supports `GOOGLE_AUTH_MODE=api_key`; the provided Gemini key was verified. Keep `EMAIL_MODE=preview` and
 `eaglesaway.com` DNS unchanged for this stage. The GCP sequence below records the previous
 target and is superseded for the private preview.
+
+## 7 October 2026 — DigitalOcean private preview deployed
+
+The Frankfurt PostgreSQL 17 cluster `eagles-away-preview-pg` is online in the dedicated
+`Eagles Away Preview` project. An App Platform deployment is active at
+<https://eagles-away-preview-ifemt.ondigitalocean.app/> with a web service, Temporal worker,
+and successful predeploy migration job. The app uses a separate preview task queue,
+runtime-only encrypted secrets, `APP_ENV=preview`, and `EMAIL_MODE=preview`. No DNS record
+for `eaglesaway.com` was changed.
+
+The deployed `/healthz` returned 200, `/` returned 401 without preview credentials, and
+authenticated `/`, `/plan/`, and `/api/catalog` returned 200. A hosted London–Lyon live session
+reached `draft_ready` with a journey, stay, partial priced total, and explicit outstanding
+checks. This is one functional smoke test, not a full route or browser acceptance audit.
+
+A sanitized app spec passed DigitalOcean's account-backed validation. Automatic approval
+review rejected an additional validation of the secret-bearing spec because it would have
+uploaded API keys unnecessarily. The actual deployment submitted runtime secrets to
+DigitalOcean as required. The ignored local spec and preview password are restricted to the
+owner's workspace and are not committed.
 
 ## Verified state
 

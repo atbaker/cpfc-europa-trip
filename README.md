@@ -1,7 +1,7 @@
 # Eagles Away
 
 A UK departure-city travel planner for Crystal Palace supporters, supported by Temporal.
-**Local live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete or deployed.**
+**Live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete.**
 Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md) for completed work,
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 
@@ -13,12 +13,12 @@ The domain is **eaglesaway.com**; the verified transactional sender uses **notif
 
 ## Private cloud preview
 
-The first cloud release is now planned for DigitalOcean App Platform in Frankfurt: one web
-service, one continuously running Temporal worker, a migration job and PostgreSQL. It will
-use the generated `.ondigitalocean.app` address behind preview access credentials and leave
-`eaglesaway.com` unchanged. The earlier GCP review remains in the
-[deployment readiness record](planning/2026-10-06-deployment-readiness.md). No cloud
-deployment has been completed yet.
+The private preview runs at
+[eagles-away-preview-ifemt.ondigitalocean.app](https://eagles-away-preview-ifemt.ondigitalocean.app/)
+on DigitalOcean App Platform in Frankfurt: one web service, one continuously running Temporal
+worker, a migration job and PostgreSQL. HTTP Basic credentials protect the preview;
+`eaglesaway.com` remains unchanged. The earlier GCP review and current deployment evidence
+are in the [deployment readiness record](planning/2026-10-06-deployment-readiness.md).
 
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
 requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
@@ -36,13 +36,11 @@ docker run --rm --entrypoint python -e PREVIEW_USERNAME=reviewer \
   'from cpfc_trip.api import create_app; print(create_app().title)'
 ```
 
-The preview also needs a migrated PostgreSQL database, encrypted App Platform variables for
-contact/session keys, SearchApi and Temporal Cloud, and a continuously running worker. The
-worker needs `GOOGLE_AUTH_MODE=api_key` and a secret `GEMINI_API_KEY` for free-text briefs and
-follow-ups because local `gcloud` credentials cannot be used by the DigitalOcean container.
-Set `FRONTEND_ORIGIN` to
-the exact hosted origin so POST requests pass the origin check. The container image alone
-does not provide a working trip flow.
+The preview uses a migrated PostgreSQL database, encrypted runtime variables for contact and
+session keys, SearchApi, Temporal Cloud, and Gemini, plus a continuously running worker.
+`GOOGLE_AUTH_MODE=api_key` enables free-text briefs and follow-ups without local `gcloud`
+credentials. `FRONTEND_ORIGIN` resolves to the hosted origin so POST requests pass the origin
+check. `EMAIL_MODE=preview` saves a local email preview and sends no email.
 
 ## Start locally
 
