@@ -26,7 +26,7 @@ with workflow.unsafe.imports_passed_through():
         Trip,
     )
     from cpfc_trip.planner.agent import MODEL_SETTINGS, Intent, planner
-    from cpfc_trip.planner.planning import choose, enumerate_specs
+    from cpfc_trip.planner.planning import choose, enumerate_specs, feasible_journey
     from cpfc_trip.planner.providers.searchapi import REQUEST_CAPS, fingerprint
     from cpfc_trip.planner.recorded import sample
 
@@ -150,6 +150,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             phase="researching" if initial else "revising",
             active_turn_id=tid,
             progress_message="Checking your travel preferences…",
+            preview_trip=None,
         )
         if self.data.planner_mode == "recorded":
             intent = self.intent.model_copy(
@@ -158,6 +159,10 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     "answer": "This is a synthetic development example, not a live travel quote.",
                 }
             )
+        elif initial and not self.brief.extra_instructions.strip():
+            # The form already supplies typed constraints. Avoid a model request on the
+            # critical path unless free text actually needs interpretation.
+            intent = self.intent
         else:
             if self.model_reserved >= self.data.limits.model_session:
                 raise ValueError("Model request budget exhausted")
@@ -232,6 +237,35 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             seen: set[str] = set()
             self.change(progress_message="Comparing transport and accommodation…")
             semaphore = asyncio.Semaphore(4)
+            first_journey_at: datetime | None = None
+
+            def show_first_journey() -> None:
+                nonlocal first_journey_at
+                if not initial or self.state.preview_trip is not None:
+                    return
+                for fixture in self.data.fixtures:
+                    for batch in batches[fixture.id]:
+                        for journey in batch.journeys:
+                            route = next(
+                                (item for item in self.data.routes if item.id == journey.route_id),
+                                None,
+                            )
+                            if route and feasible_journey(
+                                journey, fixture, effective, intent, route
+                            ):
+                                first_journey_at = workflow.now()
+                                self.change(
+                                    preview_trip=Trip(
+                                        fixture=fixture,
+                                        journey=journey,
+                                        summary="A dated return journey was found. We’re still checking accommodation and other options.",
+                                        gaps=(
+                                            "Accommodation and local transfers are still being checked.",
+                                        ),
+                                    ),
+                                    progress_message="A journey was found. Checking stays and alternatives…",
+                                )
+                                return
 
             async def acquire_job(
                 key: str, kind: str, spec: SearchSpec, cap: int
@@ -308,35 +342,51 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                         used += cap
                         self.search_reserved += cap
                         jobs.append((key, kind, spec, cap))
-                responses: list[tuple[str, str, str, SearchBatch, int, bool]] = []
                 timed_out = False
+                show_first_journey()
                 if jobs:
                     tasks = [asyncio.create_task(acquire_job(*job)) for job in jobs]
-                    done, pending = await workflow.wait(
-                        tasks,
-                        timeout=max(0, (turn_deadline - workflow.now()).total_seconds() - 2),
-                    )
+                    pending = tasks
+                    while pending:
+                        search_end = turn_deadline - timedelta(seconds=2)
+                        if first_journey_at is not None:
+                            search_end = min(search_end, first_journey_at + timedelta(seconds=30))
+                        done, pending = await workflow.wait(
+                            pending,
+                            timeout=max(0, (search_end - workflow.now()).total_seconds()),
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        if not done:
+                            timed_out = True
+                            break
+                        for task in done:
+                            key, kind, fixture_id, response, cap, known_calls = task.result()
+                            if known_calls:
+                                unused = cap - min(cap, response.calls)
+                                used -= unused
+                                self.search_reserved -= unused
+                            if response.journeys or response.stays:
+                                self.search_cache[key] = response
+                            batches[fixture_id].append(response)
+                            if kind == "flight":
+                                flight_batches.append(response)
+                        show_first_journey()
                     for task in pending:
                         task.cancel()
                     if pending:
                         await asyncio.gather(*pending, return_exceptions=True)
-                        timed_out = True
-                    responses = [task.result() for task in tasks if task in done]
-                for key, kind, fixture_id, response, cap, known_calls in responses:
-                    if known_calls:
-                        unused = cap - min(cap, response.calls)
-                        used -= unused
-                        self.search_reserved -= unused
-                    if response.journeys or response.stays:
-                        self.search_cache[key] = response
-                    batches[fixture_id].append(response)
-                    if kind == "flight":
-                        flight_batches.append(response)
                 trips = tuple(
                     choose(f, batches[f.id], effective, self.data.routes, intent)
                     for f in self.data.fixtures
                 )
-                if timed_out or (wave_index >= 1 and all(t.journey and t.stay for t in trips)):
+                if (
+                    timed_out
+                    or (wave_index >= 1 and all(t.journey and t.stay for t in trips))
+                    or (
+                        first_journey_at is not None
+                        and workflow.now() >= first_journey_at + timedelta(seconds=30)
+                    )
+                ):
                     break
             if not any(t.journey and t.stay for t in trips):
                 if (
@@ -396,6 +446,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
         # This entire commit is synchronous. A Query sees the previous or complete new revision.
         self.change(
             itinerary=new_itinerary,
+            preview_trip=None,
             transcript_tail=(*self.state.transcript_tail, message),
             last_committed_turn_id=tid,
             active_turn_id=None,

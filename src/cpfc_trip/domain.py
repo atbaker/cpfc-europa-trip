@@ -86,6 +86,12 @@ class TransferGuidance(Record):
     reviewed_at: AwareDatetime
 
 
+class MapsTransfer(Record):
+    title: str
+    description: str
+    url: str
+
+
 class Route(Record):
     id: str
     fixture_id: str
@@ -230,6 +236,7 @@ class Trip(Record):
     gaps: tuple[str, ...] = ()
     summary: str
     transfers: tuple[TransferGuidance, ...] = Field((), max_length=5)
+    maps_transfers: tuple[MapsTransfer, ...] = Field((), max_length=3)
     alternatives: tuple[Alternative, ...] = Field((), max_length=2)
 
 
@@ -287,6 +294,9 @@ class Snapshot(Record):
     phase: Phase = "created"
     progress_message: str = "Checking routes from London…"
     itinerary: Itinerary | None = None
+    # A checked return journey may be shown while accommodation is still being searched.
+    # It is never the saved or emailed itinerary.
+    preview_trip: Trip | None = None
     transcript_tail: tuple[ChatTurn, ...] = ()
     active_turn_id: UUID | None = None
     last_committed_turn_id: UUID | None = None

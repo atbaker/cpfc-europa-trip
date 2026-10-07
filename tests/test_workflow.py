@@ -127,40 +127,18 @@ async def test_no_draft_sends_failure_notice(environment, session_input):
 async def test_no_nonstop_flights_explains_failed_city_search(
     environment,
     session_input,
-    monkeypatch,
     origin,
     fixture_id,
     destination,
     suggest_trains,
     mixed_failure,
 ):
-    import json
     from datetime import UTC, datetime
-
-    from google.genai.types import GenerateContentResponse
 
     from cpfc_trip.catalog import load_catalog, validate_brief
     from cpfc_trip.domain import SearchBatch, SearchSpec
     from cpfc_trip.origins import routes_for_origin
-    from cpfc_trip.planner.agent import model
     from cpfc_trip.planner.recorded import sample
-
-    async def intent(**kwargs):
-        return GenerateContentResponse.model_validate(
-            {
-                "candidates": [
-                    {
-                        "finishReason": "STOP",
-                        "content": {
-                            "role": "model",
-                            "parts": [{"text": json.dumps({"action": "revise", "answer": ""})}],
-                        },
-                    }
-                ]
-            }
-        )
-
-    monkeypatch.setattr(model.client.aio.models, "generate_content", intent)
 
     flight_calls = 0
 
@@ -273,7 +251,15 @@ async def test_durable_pydantic_model_and_query_during_activity(
     async def deliver(state: Snapshot) -> str:
         return "test-email"
 
-    value = session_input.model_copy(update={"planner_mode": "live", "routes": ()})
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (),
+            "brief": session_input.brief.model_copy(
+                update={"extra_instructions": "Please consider my request."}
+            ),
+        }
+    )
     queue = str(uuid4())
     async with Worker(
         environment.client, task_queue=queue, workflows=[Workflow], activities=[deliver]
@@ -311,7 +297,14 @@ async def test_model_failure_is_not_reported_as_search_exhaustion(
     async def deliver(state: Snapshot) -> str:
         return "test-email"
 
-    value = session_input.model_copy(update={"planner_mode": "live"})
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "brief": session_input.brief.model_copy(
+                update={"extra_instructions": "Please consider my request."}
+            ),
+        }
+    )
     queue = str(uuid4())
     async with Worker(
         environment.client, task_queue=queue, workflows=[Workflow], activities=[deliver]
@@ -408,22 +401,21 @@ async def test_live_revision_reuses_searches_after_worker_restart(
         )
         second = await ready(handle)
         assert second.itinerary.revision == first.itinerary.revision + 1
-        assert len(searches) == count
+        # A budget change refreshes hotel preferences while keeping transport evidence.
+        assert [search for search in searches if search[0] == "flight"] == [
+            search for search in searches[:count] if search[0] == "flight"
+        ]
+        assert len(searches) == count + 2
         await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
         await handle.result()
     await Replayer(workflows=[Workflow], plugins=[PydanticAIPlugin()]).replay_workflow(
         await handle.fetch_history()
     )
-    assert len(searches) == count
+    assert len(searches) == count + 2
 
 
-async def test_slow_comparison_keeps_first_complete_wave(environment, session_input, monkeypatch):
-    import json
-
-    from google.genai.types import GenerateContentResponse
-
+async def test_slow_comparison_keeps_first_complete_wave(environment, session_input):
     from cpfc_trip.domain import SearchBatch, SearchSpec
-    from cpfc_trip.planner.agent import model
     from cpfc_trip.planner.planning import enumerate_specs
     from cpfc_trip.planner.recorded import sample
 
@@ -431,25 +423,6 @@ async def test_slow_comparison_keeps_first_complete_wave(environment, session_in
         0
     ]
     first_dates = (first_spec.outbound_date, first_spec.return_date)
-
-    async def fake_model(**kwargs):
-        return GenerateContentResponse.model_validate(
-            {
-                "candidates": [
-                    {
-                        "finishReason": "STOP",
-                        "content": {
-                            "role": "model",
-                            "parts": [
-                                {"text": json.dumps({"action": "revise", "answer": "Ready"})}
-                            ],
-                        },
-                    }
-                ]
-            }
-        )
-
-    monkeypatch.setattr(model.client.aio.models, "generate_content", fake_model)
 
     @activity.defn(name="search_flights")
     async def flights(spec: SearchSpec) -> SearchBatch:
@@ -487,5 +460,68 @@ async def test_slow_comparison_keeps_first_complete_wave(environment, session_in
         state = await ready(handle)
         assert state.itinerary and state.itinerary.trips[0].journey
         assert state.itinerary.trips[0].stay
+        await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
+        await handle.result()
+
+
+async def test_first_journey_is_visible_while_hotel_search_continues(
+    environment, session_input, monkeypatch
+):
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.agent import model
+    from cpfc_trip.planner.recorded import sample
+
+    async def fake_model(**kwargs):
+        raise AssertionError("Structured form inputs should not need Gemini")
+
+    monkeypatch.setattr(model.client.aio.models, "generate_content", fake_model)
+    hotel_started = asyncio.Event()
+    release_hotel = asyncio.Event()
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "flight")
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        hotel_started.set()
+        await release_hotel.wait()
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        await asyncio.wait_for(hotel_started.wait(), timeout=5)
+        for _ in range(50):
+            state = await handle.query(Workflow.get_snapshot)
+            if state.preview_trip:
+                break
+            await asyncio.sleep(0.05)
+        assert state.phase == "researching"
+        assert state.itinerary is None
+        assert state.preview_trip is not None
+        assert state.preview_trip.journey is not None
+        assert state.preview_trip.stay is None
+        release_hotel.set()
+        completed = await ready(handle)
+        assert completed.itinerary and completed.itinerary.trips[0].stay
+        assert completed.preview_trip is None
         await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
         await handle.result()

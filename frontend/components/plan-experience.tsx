@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ApiError, Snapshot, newer, request, terminal } from "../lib/api";
-import { ItineraryView } from "./itinerary-view";
+import { ItineraryView, JourneyPreview } from "./itinerary-view";
 import { PlanningProgress } from "./planning-progress";
 
 type Pending = { id: string; text: string; accepted: boolean };
@@ -94,9 +94,10 @@ export function PlanExperience() {
   return <div className="plan">{snapshot?.development_mode && <div className="notice">Development preview · Synthetic trips and prices · Email previews only</div>}<div className="plan-heading"><div><p className="eyebrow">YOUR AWAY DAYS</p><h1>A plan worth<br />travelling for.</h1></div><span className="tag">From {origin}</span></div>
     <div className={terminal(snapshot) ? "status" : "status sr-only"} role="status" aria-live="polite">{snapshot?.phase === "failed" ? "We couldn’t complete this trip request." : snapshot?.progress_message ?? "Connecting to your planning session…"}</div>
     {error && <p className="error" role="alert">{error}</p>}
-    {!snapshot?.itinerary && !terminal(snapshot) && (showHero
+    {!snapshot?.itinerary && !snapshot?.preview_trip && !terminal(snapshot) && (showHero
       ? <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" />
       : <div className="plan-connecting" aria-hidden="true"><span className="plan-connecting-mark" />Preparing your route…</div>)}
+    {snapshot?.preview_trip && !snapshot.itinerary && !terminal(snapshot) && <JourneyPreview trip={snapshot.preview_trip}><PlanningProgress snapshot={snapshot} city={snapshot.preview_trip.fixture.city} origin={origin} variant="preview" /></JourneyPreview>}
     {completing && <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" forceDone />}
     {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. <Link href="/">Try another trip brief <span className="arrow">→</span></Link></p>}
     {snapshot?.itinerary && !completing && <div className={`plan-reveal${pending?.accepted ? " revising" : ""}`}><ItineraryView itinerary={snapshot.itinerary} /></div>}

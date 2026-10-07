@@ -62,6 +62,8 @@ def render(snapshot: Snapshot) -> dict[str, str]:
                     transfer.source_url,
                     f"Transfer guidance reviewed {transfer.reviewed_at.isoformat()}; fares excluded.",
                 ]
+            for maps_transfer in trip.maps_transfers:
+                text += [maps_transfer.title, maps_transfer.description, maps_transfer.url]
             text.extend(trip.gaps)
             if trip.known_total:
                 text.append(
@@ -76,7 +78,12 @@ def render(snapshot: Snapshot) -> dict[str, str]:
     lines = []
     for line in text:
         if safe_url(line):
-            lines.append(f'<p><a href="{escape(line, quote=True)}">View on travel provider</a></p>')
+            label = (
+                "Open in Google Maps"
+                if line.startswith("https://www.google.com/maps/")
+                else "View on travel provider"
+            )
+            lines.append(f'<p><a href="{escape(line, quote=True)}">{label}</a></p>')
         else:
             lines.append(f"<p>{escape(line)}</p>")
     return dict(

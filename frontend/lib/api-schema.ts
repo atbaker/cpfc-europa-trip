@@ -395,6 +395,15 @@ export interface components {
              */
             caveats: string[];
         };
+        /** MapsTransfer */
+        MapsTransfer: {
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Url */
+            url: string;
+        };
         /** MessageCommand */
         MessageCommand: {
             /**
@@ -536,6 +545,7 @@ export interface components {
              */
             progress_message: string;
             itinerary?: components["schemas"]["Itinerary"] | null;
+            preview_trip?: components["schemas"]["Trip"] | null;
             /**
              * Transcript Tail
              * @default []
@@ -664,6 +674,11 @@ export interface components {
              * @default []
              */
             transfers: components["schemas"]["TransferGuidance"][];
+            /**
+             * Maps Transfers
+             * @default []
+             */
+            maps_transfers: components["schemas"]["MapsTransfer"][];
             /**
              * Alternatives
              * @default []

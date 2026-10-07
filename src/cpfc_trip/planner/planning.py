@@ -17,6 +17,7 @@ from cpfc_trip.domain import (
     Trip,
 )
 from cpfc_trip.planner.agent import Intent
+from cpfc_trip.planner.maps_links import transfer_links
 from cpfc_trip.planner.prices import total
 
 
@@ -76,6 +77,34 @@ def feasible(
     intent: Intent,
     route: Route | None = None,
 ) -> bool:
+    if not feasible_journey(journey, fixture, brief, intent, route):
+        return False
+    outbound, inbound = journey.outbound, journey.inbound
+    if (
+        stay.check_in != outbound[-1].arrives_at.astimezone(ZoneInfo(fixture.timezone)).date()
+        or stay.check_out != inbound[0].departs_at.astimezone(ZoneInfo(fixture.timezone)).date()
+    ):
+        return False
+    if intent.private_room and stay.room_type != "private":
+        return False
+    if intent.private_bathroom and stay.bathroom != "private":
+        return False
+    if (
+        stay.max_guests is not None
+        and stay.max_guests * brief.travellers.rooms < brief.travellers.size
+    ):
+        return False
+    return True
+
+
+def feasible_journey(
+    journey: Journey,
+    fixture: Fixture,
+    brief: Brief,
+    intent: Intent,
+    route: Route | None = None,
+) -> bool:
+    """Check that a dated return journey fits the brief before showing it."""
     window = next(w for w in brief.windows if w.fixture_id == fixture.id)
     if intent.unsupported_requirements:
         return False
@@ -111,23 +140,9 @@ def feasible(
     for direction in (outbound, inbound):
         if any(b.departs_at < a.arrives_at for a, b in pairwise(direction)):
             return False
-    if (
-        stay.check_in != outbound[-1].arrives_at.astimezone(ZoneInfo(fixture.timezone)).date()
-        or stay.check_out != inbound[0].departs_at.astimezone(ZoneInfo(fixture.timezone)).date()
-    ):
-        return False
-    if intent.private_room and stay.room_type != "private":
-        return False
-    if intent.private_bathroom and stay.bathroom != "private":
-        return False
     if intent.preferred_airports and (
         outbound[0].origin not in intent.preferred_airports
         or inbound[-1].destination not in intent.preferred_airports
-    ):
-        return False
-    if (
-        stay.max_guests is not None
-        and stay.max_guests * brief.travellers.rooms < brief.travellers.size
     ):
         return False
     return True
@@ -232,6 +247,7 @@ def choose(
         gaps=tuple(gaps),
         feasibility="needs_checks",
         transfers=route.guidance,
+        maps_transfers=transfer_links(brief.origin_city, journey, stay, fixture),
         alternatives=tuple(alternatives),
         summary=f"{'Prioritises lower known costs among the checked options' if brief.budget_tier == 'budget' else 'Balanced price and journey time' if brief.budget_tier == 'value' else 'Prioritises shorter journeys and more comfortable stays'}. Transfer fares and outstanding checks are excluded.",
     )

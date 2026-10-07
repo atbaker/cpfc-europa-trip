@@ -1,5 +1,12 @@
 # Development notes
 
+## 7 October 2026 — progressive journey preview and consistent plan cards
+
+- Structured first briefs now enter live search without a Gemini request when the optional free-text field is empty. The workflow publishes the first feasible dated return journey while it continues searching for accommodation and alternatives, for at most 30 seconds after that preview and within the existing turn and provider-request limits. A preview is neither committed nor emailed. SearchApi remains the dated flight, hotel and rail source.
+- Completed plans now link to fresh Google Maps transit directions from the selected UK city centre to the departure point and from the arrival point to the stay. The app does not claim Maps transfer times, changes or fares because no Google Maps Routes API key is configured. Free-text briefs and follow-ups still need Gemini; local Google credential refresh failed during this work.
+- The interim preview now reuses the completed plan's match and transport cards. The match appears first, followed by a rotating status card for stays and alternatives, then the checked outbound and return legs. This keeps the current search status visible on long multi-leg journeys and avoids claiming that a return is still being sought after one has been found.
+- Browser checks completed London–Lyon and Manchester–Lyon plans and found no horizontal overflow at a 390 px mobile viewport. The brief preview was transient in the browser and was verified with a component test; no measured first-result latency claim is made. The full `scripts/check.sh` gate passed: 80 Python and 19 frontend tests, Ruff, mypy, generated API schema comparison, TypeScript, ESLint and production build. Two PostgreSQL tests were skipped because no test database was configured.
+
 ## 5 October 2026 — Nottingham to Białystok session diagnosis
 
 - Temporal execution `e7b61f5a-4ba5-4d02-8f12-63a84dafa708` completed after about 59 seconds with no itinerary. Three SearchApi nonstop flight searches from East Midlands (EMA) to Warsaw (WAW), for 9–11, 9–10 and 10–11 December 2026, each returned an explicit no-results response. Accommodation results were found; without the flight, the onward Warsaw–Białystok train could not form a complete trip. The failure email was a local preview, with no external send.

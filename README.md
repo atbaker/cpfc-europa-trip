@@ -6,6 +6,7 @@ Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md)
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 
 The app uses Gemini Flash 3.8, SearchAPI flight/hotel/train data, Temporal and PostgreSQL.
+During live research the page can show a checked return journey before a complete trip is ready; this preview is not saved or emailed. Initial briefs without free-text instructions search directly from the typed form values, so a Gemini outage does not block that first search. The finished plan links to fresh Google Maps directions for local transfers without claiming a transfer time or fare.
 The Next.js frontend polls authenticated Temporal snapshots through FastAPI. Users get a
 frozen itinerary with direct travel links; the app does not book travel or sell match tickets.
 The domain is **eaglesaway.com**; the verified transactional sender uses **notifications.eaglesaway.com**.

@@ -32,17 +32,21 @@ export function PlanningProgress({ snapshot, city, origin = "London", variant = 
   snapshot: Snapshot | null;
   city?: string;
   origin?: string;
-  variant?: "hero" | "inline";
+  variant?: "hero" | "inline" | "preview";
   forceDone?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const stage: Stage = forceDone ? "done" : stageFor(snapshot, { ignoreItinerary: variant === "inline" });
-  const lines = tickerLines(stage, city, origin);
+  const stage: Stage = forceDone ? "done" : stageFor(snapshot, { ignoreItinerary: variant !== "hero" });
+  const lines = variant === "preview" ? [
+    city ? `Checking places to stay in ${city}…` : "Checking places to stay…",
+    "Comparing available rooms and prices…",
+    "Looking for better journey options…",
+  ] : tickerLines(stage, city, origin);
   const index = useTicker((stage === "preferences" || stage === "searching") && !reduced, lines.length);
   const rotatingText = lines[index];
 
-  if (variant === "inline") {
-    const text = stage === "searching" ? rotatingText : "Updating your plan…";
+  if (variant !== "hero") {
+    const text = variant === "preview" || stage === "searching" ? rotatingText : "Updating your plan…";
     return <p className="ticker inline" aria-hidden="true"><span key={reduced ? "static" : index} className={reduced ? undefined : "tfade"}>{text}</span></p>;
   }
 

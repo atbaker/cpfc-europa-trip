@@ -14,7 +14,7 @@ export function stageFor(
   // revision ask us to ignore itinerary presence and read the live progress instead.
   if (!opts.ignoreItinerary && (snapshot.itinerary || snapshot.phase === "draft_ready")) return "done";
   if (["failed", "email_failed", "emailed"].includes(snapshot.phase as string) && !snapshot.itinerary) return "failed";
-  if (/compar/i.test(snapshot.progress_message)) return "searching";
+  if (snapshot.preview_trip || /compar/i.test(snapshot.progress_message)) return "searching";
   return "preferences";
 }
 

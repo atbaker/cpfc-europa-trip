@@ -12,6 +12,7 @@ describe("stageFor", () => {
   });
   it("moves to searching once the workflow is comparing", () => {
     expect(stageFor(snap({ progress_message: "Comparing transport and accommodation…" }))).toBe("searching");
+    expect(stageFor(snap({ progress_message: "A journey was found. Checking stays…", preview_trip: {} as Snapshot["preview_trip"] }))).toBe("searching");
   });
   it("is done when an itinerary exists or the phase is draft_ready", () => {
     expect(stageFor(snap({ itinerary: {} as Snapshot["itinerary"] }))).toBe("done");
