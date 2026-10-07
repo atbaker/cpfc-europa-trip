@@ -2,6 +2,22 @@
 
 This is a dated discovery record for the first cloud deployment. It supplements the [approved MVP architecture](mvp-plan.md#infrastructure-and-deployment) and the [engineering handoff](2026-09-30-engineering-handoff.md). No production resources or DNS records were changed during this review.
 
+## 7 October 2026 — DigitalOcean target replaces the GCP preview
+
+The owner chose DigitalOcean App Platform after the GCP billing block. The `doctl` profile
+initially returned HTTP 401; after reauthentication a dedicated project and Frankfurt
+PostgreSQL 17 cluster were created. The database is still provisioning, and no app or DNS
+record has been created. The preview image builds locally, and a container import verified the
+static export and API package. `scripts/check.sh` passed after adding a required HTTP Basic
+access gate for `APP_ENV=preview` and DigitalOcean PostgreSQL URL/TLS handling. The hosted
+preview still needs a ready PostgreSQL database, encrypted runtime values, the Temporal worker
+and migrations. The initial DB password appeared in CLI creation output and must be rotated
+before use. The worker now supports `GOOGLE_AUTH_MODE=api_key`, but
+a Gemini API key usable outside the local gcloud profile is still needed for free-text briefs
+and follow-ups. Keep `EMAIL_MODE=preview` and
+`eaglesaway.com` DNS unchanged for this stage. The GCP sequence below records the previous
+target and is superseded for the private preview.
+
 ## Verified state
 
 | Area | Evidence on 6 October | Consequence |

@@ -9,6 +9,7 @@ from pydantic import Field
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.temporal import TemporalDurability
 from pydantic_ai.models.google import GoogleModelSettings
+from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.google_cloud import GoogleCloudProvider
 from temporalio.common import RetryPolicy
 
@@ -78,15 +79,25 @@ planner = Agent(
 )
 
 
-async def configure_model(settings: Settings) -> None:
+def model_provider(settings: Settings) -> GoogleProvider | GoogleCloudProvider:
+    """Build the Gemini provider for the configured runtime identity."""
+    if settings.google_auth_mode == "api_key":
+        return GoogleProvider(
+            api_key=settings.gemini_api_key.get_secret_value(),
+            retry_options=HttpRetryOptions(attempts=1),
+        )
     if not settings.google_cloud_project:
         raise ValueError("Set GOOGLE_CLOUD_PROJECT before starting live planning")
-    provider = GoogleCloudProvider(
+    return GoogleCloudProvider(
         credentials=credentials(settings),
         project=settings.google_cloud_project,
         location=settings.google_cloud_location,
         retry_options=HttpRetryOptions(attempts=1),
     )
+
+
+async def configure_model(settings: Settings) -> None:
+    provider = model_provider(settings)
     await model.client.aio.aclose()
     # Keep the registered Model object stable for Temporal; configure its provider before polling.
     model._provider = provider

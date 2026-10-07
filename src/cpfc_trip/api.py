@@ -1,6 +1,9 @@
 """JSON-only API. All active session reads Query Temporal directly."""
 
+import base64
+import binascii
 import re
+import secrets
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -99,6 +102,27 @@ def create_app(
 
     @app.middleware("http")
     async def protect(request: Request, call_next: Any) -> Response:
+        if config.app_env == "preview" and request.url.path != "/healthz":
+            encoded = request.headers.get("authorization", "").removeprefix("Basic ")
+            try:
+                decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+                username, separator, password = decoded.partition(":")
+            except (binascii.Error, UnicodeDecodeError):
+                username, separator, password = "", "", ""
+            if (
+                not separator
+                or not secrets.compare_digest(username.encode(), config.preview_username.encode())
+                or not secrets.compare_digest(
+                    password.encode(), config.preview_password.get_secret_value().encode()
+                )
+            ):
+                return Response(
+                    status_code=401,
+                    headers={
+                        "WWW-Authenticate": 'Basic realm="Eagles Away preview"',
+                        "Cache-Control": "no-store",
+                    },
+                )
         if (
             request.method == "POST"
             and request.url.path.startswith("/api/")

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "preview", "production"] = "development"
     frontend_origin: str = "http://localhost:3000"
     static_export_dir: str = ""
+    preview_username: str = ""
+    preview_password: SecretStr = SecretStr("")
     database_url: str = "postgresql+asyncpg://cpfc:cpfc@localhost:5432/cpfc"
     contact_encryption_key: SecretStr = SecretStr("")
     session_secret: SecretStr = SecretStr("")
@@ -24,7 +26,8 @@ class Settings(BaseSettings):
     searchapi_enabled: bool = True
     google_cloud_project: str = ""
     google_cloud_location: Literal["eu"] = "eu"
-    google_auth_mode: Literal["adc", "gcloud"] = "adc"
+    google_auth_mode: Literal["adc", "gcloud", "api_key"] = "adc"
+    gemini_api_key: SecretStr = SecretStr("")
     google_gcloud_configuration: str = ""
     google_gcloud_account: str = ""
     resend_api_key: SecretStr = SecretStr("")
@@ -37,6 +40,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def production(self) -> Self:
+        if self.google_auth_mode == "api_key" and not self.gemini_api_key.get_secret_value():
+            raise ValueError("Gemini API key is required for api_key authentication")
+        if self.app_env == "preview" and (
+            not self.preview_username or not self.preview_password.get_secret_value()
+        ):
+            raise ValueError("Preview requires access credentials")
         if self.app_env == "production":
             if self.google_auth_mode != "adc" or not self.google_cloud_project:
                 raise ValueError(

@@ -13,27 +13,36 @@ The domain is **eaglesaway.com**; the verified transactional sender uses **notif
 
 ## Private cloud preview
 
-The first cloud release is planned for the dedicated `cpfc-europa-trip-prod` GCP project, behind
-Cloud Run Identity-Aware Proxy. It will use its generated `run.app` address and leave
-`eaglesaway.com` unchanged. See the [deployment readiness record](planning/2026-10-06-deployment-readiness.md)
-for the verified prerequisites and open decisions. No cloud deployment has been completed yet.
+The first cloud release is now planned for DigitalOcean App Platform in Frankfurt: one web
+service, one continuously running Temporal worker, a migration job and PostgreSQL. It will
+use the generated `.ondigitalocean.app` address behind preview access credentials and leave
+`eaglesaway.com` unchanged. The earlier GCP review remains in the
+[deployment readiness record](planning/2026-10-06-deployment-readiness.md). No cloud
+deployment has been completed yet.
 
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
 requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
 serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
-`cpfc-worker` as a Cloud Run worker pool command. Preview email mode must remain `preview`.
+`cpfc-worker` as the App Platform worker command. Preview email mode must remain `preview`.
+`APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
+available to the platform health check. The database adapter accepts DigitalOcean's PostgreSQL
+connection URL and uses `asyncpg` with its requested TLS mode.
 Build and smoke-test locally without placing `.env` files in the image:
 
 ```bash
 docker build -f Dockerfile.preview -t eagles-away:preview .
-docker run --rm --entrypoint python eagles-away:preview -c \
+docker run --rm --entrypoint python -e PREVIEW_USERNAME=reviewer \
+  -e PREVIEW_PASSWORD=local-smoke-password eagles-away:preview -c \
   'from cpfc_trip.api import create_app; print(create_app().title)'
 ```
 
-The preview also needs a migrated Cloud SQL database, Secret Manager values for encryption,
-sessions, SearchAPI and Temporal Cloud, a worker pool, and Gemini access through its runtime
-service account. Set `FRONTEND_ORIGIN` to the exact IAP-protected service origin so POST
-requests pass the origin check. The container image alone does not provide a working trip flow.
+The preview also needs a migrated PostgreSQL database, encrypted App Platform variables for
+contact/session keys, SearchApi and Temporal Cloud, and a continuously running worker. The
+worker needs `GOOGLE_AUTH_MODE=api_key` and a secret `GEMINI_API_KEY` for free-text briefs and
+follow-ups because local `gcloud` credentials cannot be used by the DigitalOcean container.
+Set `FRONTEND_ORIGIN` to
+the exact hosted origin so POST requests pass the origin check. The container image alone
+does not provide a working trip flow.
 
 ## Start locally
 

@@ -1,5 +1,11 @@
 # Development notes
 
+## 7 October 2026 — DigitalOcean private-preview preparation
+
+- The owner changed the first hosting target from the unbilled GCP project to DigitalOcean App Platform. A `doctl` account request initially returned HTTP 401; after the owner reconnected the CLI, a dedicated Eagles Away Preview project was created. A smallest-plan PostgreSQL 17 cluster was created in Frankfurt and is still provisioning. No App Platform app or DNS record has been created. The generated DigitalOcean URL is intended to remain a credential-protected private preview, with `EMAIL_MODE=preview` and `eaglesaway.com` unchanged.
+- The existing combined web image now has required HTTP Basic preview credentials, a public `/healthz` for platform checks, and support for DigitalOcean's PostgreSQL URL and TLS query. The worker can be configured with a Gemini API key instead of local gcloud or GCP ADC; an actual key has not yet been provided or verified. The Temporal Cloud endpoint and SearchApi remain the existing external services.
+- `scripts/check.sh` passed with 89 Python and 19 frontend tests, Ruff, mypy, generated API schema comparison, TypeScript, ESLint and production build. Two PostgreSQL tests skipped without a configured test database. The preview image rebuilt and a container import found the API package and static plan page. An ignored local App Platform draft passed `doctl apps spec validate --schema-only`; full account-backed validation and a hosted trip are still pending the database becoming ready and runtime secrets. The CLI printed the initial database URI during creation; its password must be rotated before deployment. A rotation attempt while the cluster was still creating returned HTTP 422.
+
 ## 7 October 2026 — connecting-flight fallback
 
 - Temporal session `d695caf9-c53a-4738-9997-16998ee4e858` had no nonstop Manchester–Salzburg flight results for its three January date pairs. The search now tries nonstop flights first and, when no complete flight journey is found, requests options with at most one stop within an eight-call flight budget and the existing search deadline. It validates the connection airport and layover evidence before showing a route; the plan labels the stop and asks travellers to confirm baggage and terminal details.

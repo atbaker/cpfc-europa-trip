@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr, ValidationError
 from sqlalchemy import select
 from temporalio.client import WorkflowQueryFailedError
 from temporalio.exceptions import ApplicationError
@@ -20,6 +21,12 @@ from cpfc_trip.planner.agent import Intent
 from cpfc_trip.planner.planning import choose, enumerate_specs
 from cpfc_trip.planner.recorded import sample
 from cpfc_trip.temporal.activities import DeliveryActivities
+
+
+def test_preview_requires_access_credentials() -> None:
+    """A deployment cannot accidentally expose the preview without its access gate."""
+    with pytest.raises(ValidationError, match="Preview requires access credentials"):
+        Settings(app_env="preview", preview_username="", preview_password="")
 
 
 def frozen(data):
@@ -212,6 +219,8 @@ async def test_preview_serves_export_and_uses_secure_session_cookie(
             "app_env": "preview",
             "frontend_origin": "https://preview.example",
             "static_export_dir": str(export),
+            "preview_username": "previewer",
+            "preview_password": SecretStr("private-preview-password"),
         }
     )
     repository = AsyncMock()
@@ -222,6 +231,12 @@ async def test_preview_serves_export_and_uses_secure_session_cookie(
         app.router.lifespan_context(app),
         AsyncClient(transport=ASGITransport(app=app), base_url="https://preview.example") as client,
     ):
+        assert (await client.get("/healthz")).status_code == 200
+        denied = await client.get("/")
+        assert denied.status_code == 401
+        assert denied.headers["www-authenticate"] == 'Basic realm="Eagles Away preview"'
+        assert (await client.get("/api/catalog")).status_code == 401
+        client.auth = ("previewer", "private-preview-password")
         assert "Eagles Away preview" in (await client.get("/")).text
         assert "Your plan" in (await client.get("/plan/")).text
         assert (await client.get("/api/catalog")).status_code == 200
