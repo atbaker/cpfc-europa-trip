@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from html import unescape
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -169,6 +170,30 @@ def test_email_escapes_and_has_no_script_links(session_input):
     payload = render(snapshot)
     assert "<script>" not in payload["html"] and "&lt;script&gt;" in payload["html"]
     assert "Prices may have changed" in payload["text"]
+
+
+def test_email_matches_plan_card_structure(session_input: SessionInput) -> None:
+    """The email should carry the website's visual hierarchy and practical trip details."""
+    payload = render(frozen(session_input))
+    html = payload["html"]
+    assert 'role="presentation"' in html
+    assert "EAGLES <span" in html and "AWAY" in html
+    assert "A plan worth travelling for." in html
+    assert "MATCHDAY" in html
+    assert "OUTBOUND" in html and "RETURN" in html
+    assert "STAY" in html and "Before you book" in html
+    assert "#bf1934" in html and "#20509a" in html
+    assert "Known subtotal" in html
+    assert "Price source:" in html
+
+
+def test_failure_email_keeps_branded_summary(session_input: SessionInput) -> None:
+    """A failed search should still send a readable branded email."""
+    snapshot = frozen(session_input).model_copy(update={"itinerary": None})
+    payload = render(snapshot)
+    assert "A plan worth travelling for." in payload["html"]
+    assert "We couldn't verify a useful itinerary" in unescape(payload["html"])
+    assert "No travel has been booked" in payload["text"]
 
 
 async def test_api_auth_polling_204_and_csrf(

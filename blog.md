@@ -1,5 +1,11 @@
 # Development notes
 
+## 7 October 2026 — branded email test
+
+- A locally rendered live London–Lyon plan was sent through the existing idempotent Resend Activity to the owner's requested test inbox. Resend accepted the first message, and the owner confirmed it arrived. The sending-only key cannot read delivery status; the live webhook signing secret is not configured.
+- The HTML renderer now follows the website's paper, red and blue palette, masthead, trip cards, match card, price summary and outstanding-check notice. It retains the plain-text alternative and safe provider links. The revised message was sent as a separate, idempotent test and Resend accepted it (`01a117b2-f619-70db-bb4e-fe48fe470931`). Receipt in the inbox and visual approval of this revised version are pending.
+- Ruff, mypy and the full Python suite passed (91 tests; two PostgreSQL tests skipped by the test setup). A sanitized DigitalOcean spec with `EMAIL_MODE=resend`, runtime-only Resend key and sender passed account-backed validation. DigitalOcean remains on `EMAIL_MODE=preview`; the live-email deployment awaits the owner's approval of the revised email.
+
 ## 7 October 2026 — DigitalOcean private preview live
 
 - The provided `GEMINI_API_KEY` passed a live validity check. The Frankfurt PostgreSQL 17 cluster became online, the initial admin password was rotated, and database `cpfc` was created. A sanitized App Platform spec passed account-backed validation. Automatic approval review rejected an unnecessary validation upload of the secret-bearing spec; the actual deployment submitted runtime secrets to DigitalOcean as required.

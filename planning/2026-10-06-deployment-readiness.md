@@ -34,6 +34,16 @@ uploaded API keys unnecessarily. The actual deployment submitted runtime secrets
 DigitalOcean as required. The ignored local spec and preview password are restricted to the
 owner's workspace and are not committed.
 
+## 7 October 2026 — live email candidate awaiting review
+
+The existing Resend delivery Activity accepted a local live email using a frozen London–Lyon
+plan, and the owner confirmed receipt. A redesigned email matching the website's plan-card
+hierarchy was accepted as a separate idempotent test; the owner has not yet confirmed the
+revised appearance. A sanitized App Platform candidate with `EMAIL_MODE=resend` and a
+runtime-only Resend key and sender passed account-backed validation. The deployed app remains
+on `EMAIL_MODE=preview` until the owner approves the email change. Signed delivery-status
+webhooks remain unconfigured, so provider acceptance is not a delivery confirmation.
+
 ## Verified state
 
 | Area | Evidence on 6 October | Consequence |

@@ -180,7 +180,8 @@ allowance minus usage too. Account verification does not prove every search engi
 Keep `EMAIL_MODE=preview` for routine development. `EMAIL_MODE=resend` performs actual delivery
 and needs `RESEND_API_KEY` and a verified `RESEND_FROM_EMAIL`. A sending-only key must be scoped
 to the actual From domain. `RESEND_WEBHOOK_SECRET` is needed for signed delivery-status webhooks;
-its live setup is still TODO. Email styling remains deferred for frontend review.
+its live setup is still TODO. The HTML email uses the same colours and plan-card hierarchy as
+the website, with a plain-text alternative. It does not depend on the website stylesheet.
 
 The frozen itinerary is persisted and rendered without another research pass. The outbox
 freezes the sender/content/idempotency key before sending; ambiguous sends are never retried
