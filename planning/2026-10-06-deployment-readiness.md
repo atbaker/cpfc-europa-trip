@@ -44,6 +44,20 @@ runtime-only Resend key and sender passed account-backed validation. The deploye
 on `EMAIL_MODE=preview` until the owner approves the email change. Signed delivery-status
 webhooks remain unconfigured, so provider acceptance is not a delivery confirmation.
 
+## 7 October 2026 — live email enabled on the private preview
+
+The owner approved the revised email format and live sending for the protected preview.
+DigitalOcean deployment `91a13e43-ef9a-44f1-b5e3-84361fc687b8` built commit `a1dcaf8`
+and became active with successful build, migration and deploy steps. `EMAIL_MODE=resend` is
+active; the Resend key is a runtime-only secret. `/healthz` returned 200, anonymous `/`
+returned 401, and the authenticated page and catalog returned 200.
+
+Hosted London–Lyon session `7b5f5233-ee67-425c-9b75-83a15b45c1b0` reached `draft_ready`.
+Its finalize request was accepted, and the workflow reached `emailed` with Resend receipt
+`01a117ba-9fbd-79d0-a9d7-9224a2ea2488`. The sending-only key cannot read delivery status,
+and no webhook signing secret is configured; the owner must check the inbox to confirm arrival.
+The preview remains password-protected and `eaglesaway.com` DNS is unchanged.
+
 ## Verified state
 
 | Area | Evidence on 6 October | Consequence |

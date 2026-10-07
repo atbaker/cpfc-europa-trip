@@ -1,5 +1,10 @@
 # Development notes
 
+## 7 October 2026 — DigitalOcean live email preview
+
+- The owner approved the revised email format for the password-protected preview. DigitalOcean app deployment `91a13e43-ef9a-44f1-b5e3-84361fc687b8` built email-template commit `a1dcaf8` and reached `ACTIVE` with successful build, migration and deploy steps. `EMAIL_MODE=resend` is active, with the Resend sending key stored as a runtime-only secret. The custom domain was not changed.
+- The hosted health endpoint returned 200, anonymous home returned 401, and authenticated home and catalog returned 200. A new London–Lyon session using the owner's requested test address reached `draft_ready`; finalization was accepted, then its Temporal snapshot reached `emailed` with Resend receipt `01a117ba-9fbd-79d0-a9d7-9224a2ea2488`. Inbox arrival remains unverified from this task because the key is sending-only and signed delivery webhooks are not configured.
+
 ## 7 October 2026 — branded email test
 
 - A locally rendered live London–Lyon plan was sent through the existing idempotent Resend Activity to the owner's requested test inbox. Resend accepted the first message, and the owner confirmed it arrived. The sending-only key cannot read delivery status; the live webhook signing secret is not configured.

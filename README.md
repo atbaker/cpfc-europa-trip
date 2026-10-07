@@ -23,7 +23,8 @@ are in the [deployment readiness record](planning/2026-10-06-deployment-readines
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
 requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
 serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
-`cpfc-worker` as the App Platform worker command. Preview email mode must remain `preview`.
+`cpfc-worker` as the App Platform worker command. The protected preview now uses
+`EMAIL_MODE=resend` for live itinerary emails.
 `APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
 available to the platform health check. The database adapter accepts DigitalOcean's PostgreSQL
 connection URL and uses `asyncpg` with its requested TLS mode.
@@ -40,7 +41,9 @@ The preview uses a migrated PostgreSQL database, encrypted runtime variables for
 session keys, SearchApi, Temporal Cloud, and Gemini, plus a continuously running worker.
 `GOOGLE_AUTH_MODE=api_key` enables free-text briefs and follow-ups without local `gcloud`
 credentials. `FRONTEND_ORIGIN` resolves to the hosted origin so POST requests pass the origin
-check. `EMAIL_MODE=preview` saves a local email preview and sends no email.
+check. The Resend sending key is a runtime-only App Platform secret. Signed delivery-status
+webhooks are not configured, so the app records provider acceptance but cannot confirm inbox
+delivery or bounces.
 
 ## Start locally
 
