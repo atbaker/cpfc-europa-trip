@@ -131,11 +131,12 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .trip > h2 { margin: 12px 0; }
 .journey-preview { margin-top: var(--space-4); animation: cpfc-fade .3s ease; }
 .timeline { display: grid; gap: var(--space-2); margin: var(--space-3) 0; }
+.trip-section { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.trip-section > h3, .trip-section > .fine { margin: 0; }
 .travel-card { padding: var(--card-padding); border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
 .travel-card h3 { margin: 9px 0; }
 .pending-card { border-color: #d6e4f0; background: var(--soft-blue); }
 .pending-card h3 { margin-bottom: var(--space-1); }
-.maps-transfer { margin-bottom: var(--space-2); }
 .travel-card p { margin-bottom: 10px; font-size: 14px; }
 .price { margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--line); font-size: 14px; }
 .price strong { font-size: 20px; }

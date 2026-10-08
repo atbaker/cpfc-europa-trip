@@ -1,5 +1,9 @@
 # Development notes
 
+## 8 October 2026 — transfer section spacing
+
+- The local-transfer heading touched the official-transfer card because the adjacent sections had no shared layout gap; only Maps cards had individual bottom margins. Both transfer sections now use one grid spacing rule, and the Maps-only margin is removed. `scripts/check.sh` passed with 91 Python tests, two PostgreSQL fixture skips, 19 frontend tests, lint, typing and production build. Hosted visual verification is pending deployment.
+
 ## 8 October 2026 — generated preview URL POST failure
 
 - After `eaglesaway.com` became the App Platform primary domain, `${APP_URL}` resolved to that primary origin and the generated preview URL's POST requests returned 403 from the API origin guard. The API now supports an explicit `ADDITIONAL_FRONTEND_ORIGINS` list, with the generated preview URL as the sole additional hosted origin. The regression test accepts both trusted origins and rejects an unrelated one.
