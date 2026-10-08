@@ -4,6 +4,7 @@
 
 - The owner found the Fine-tune your away day panel unhelpful and asked to remove it. The frontend no longer renders the transcript, follow-up form, pending-message state or closed-conversation panel. Unused conversation CSS and the inline progress variant were removed. The saved itinerary, email action and a simple new-brief link for ended sessions remain. The backend message endpoint and stored transcripts remain for existing-session compatibility; no new follow-up can be sent from the website. The session note no longer mentions a message limit.
 - `scripts/check.sh` passed with 91 Python tests, two PostgreSQL fixture skips, 19 frontend tests, lint, typing and production build. Hosted deployment and visual verification are pending.
+- DigitalOcean deployment `da06f1fc-3f9b-4aa4-abe2-21bb6660bdf2` built commit `139bf67` and reached `ACTIVE`. Hosted checks returned 200 for `/healthz` and an authenticated `/plan/` page, while anonymous `/` still returned 401. The new plan layout was verified by component tests; the authenticated session was not visually reloaded in a browser during this check.
 
 ## 8 October 2026 — transfer section spacing
 
