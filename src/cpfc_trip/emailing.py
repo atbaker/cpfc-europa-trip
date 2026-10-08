@@ -266,15 +266,6 @@ def _render_html(snapshot: Snapshot, title: str) -> str:
         + _paragraph(intro)
         + trip_cards
         + caveats
-        + _paragraph(
-            "Prices may have changed. Confirm every detail on the travel provider's site.",
-            muted=True,
-        )
-        + _paragraph(
-            f"No match tickets, bookings, or travel to/from the {snapshot.origin_city} "
-            "departure hub are included.",
-            muted=True,
-        )
         + "</td></tr></table></td></tr></table></body></html>"
     )
 
@@ -343,11 +334,6 @@ def render(snapshot: Snapshot) -> dict[str, str]:
                     f"Known subtotal: {trip.known_total.currency} "
                     f"{trip.known_total.minor_units / 100:.2f}; incomplete price coverage."
                 )
-    text += [
-        "",
-        "Prices may have changed. Confirm every detail on the travel provider's site.",
-        f"No match tickets, bookings, or travel to/from the {snapshot.origin_city} departure hub are included.",
-    ]
     return dict(
         subject=title,
         text="\n".join(text),

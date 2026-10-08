@@ -187,6 +187,18 @@ def test_email_matches_plan_card_structure(session_input: SessionInput) -> None:
     assert "Price source:" in html
 
 
+def test_email_shows_saved_caveats_once(session_input: SessionInput) -> None:
+    """The email should use the itinerary's caveats without adding a second version."""
+    snapshot = frozen(session_input)
+    assert snapshot.itinerary is not None
+    payload = render(snapshot)
+    for body in (payload["text"], unescape(payload["html"])):
+        for caveat in snapshot.itinerary.caveats:
+            assert body.count(caveat) == 1
+        assert body.count("Prices may have changed") == 1
+        assert "No match tickets, bookings, or travel" not in body
+
+
 def test_failure_email_keeps_branded_summary(session_input: SessionInput) -> None:
     """A failed search should still send a readable branded email."""
     snapshot = frozen(session_input).model_copy(update={"itinerary": None})
