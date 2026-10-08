@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     app_env: Literal["development", "test", "preview", "production"] = "development"
     frontend_origin: str = "http://localhost:3000"
+    additional_frontend_origins: str = ""
     static_export_dir: str = ""
     preview_username: str = ""
     preview_password: SecretStr = SecretStr("")

@@ -1,6 +1,14 @@
 # Eagles Away deployment readiness — 6 October 2026
 
-This is a dated discovery record for the first cloud deployment. It supplements the [approved MVP architecture](mvp-plan.md#infrastructure-and-deployment) and the [engineering handoff](2026-09-30-engineering-handoff.md). No production resources or DNS records were changed during this review.
+This is a dated discovery record for the first cloud deployment. It supplements the [approved MVP architecture](mvp-plan.md#infrastructure-and-deployment) and the [engineering handoff](2026-09-30-engineering-handoff.md). No production resources or DNS records were changed during the initial review; later updates are recorded below.
+
+## 8 October 2026 — preview origin correction
+
+Making `eaglesaway.com` the DigitalOcean primary domain changed `${APP_URL}`, so POST requests from the generated `ondigitalocean.app` preview URL returned 403. The API now accepts an explicit, comma-separated `ADDITIONAL_FRONTEND_ORIGINS` allowlist alongside `FRONTEND_ORIGIN`. The hosted spec adds only `https://eagles-away-preview-ifemt.ondigitalocean.app` as an additional origin; unrelated origins still return 403. A regression test covers both trusted origins and rejection of an unrelated origin. The full check passed with 91 Python tests, two PostgreSQL tests skipped by their fixture, and 19 frontend tests. A pre-existing frontend test cleanup issue surfaced in the first check and was corrected before the passing run. Deployment and hosted POST verification are pending.
+
+## 7 October 2026 — custom domain registration pending DNS
+
+The owner requested the apex `eaglesaway.com` for the password-protected preview. DigitalOcean App Platform accepted it as the primary custom domain on app `373808be-b5ec-4d20-b7fc-d8dbe906aff9`, with `APP_ENV=preview` and HTTP Basic credentials retained. The sanitized spec passed account-backed validation. The domain is still `CONFIGURING`, with certificate issuance waiting for ownership validation; no Cloudflare DNS record has been changed because dashboard sign-in is pending. The generated preview URL returned 200 for `/healthz` and 401 for anonymous `/` after registration. The next step is a Cloudflare DNS-only apex CNAME to `eagles-away-preview-ifemt.ondigitalocean.app`, followed by certificate, HTTPS, gate and origin checks. Preserve the existing mail records and Cloudflare nameservers.
 
 ## 7 October 2026 — DigitalOcean target replaces the GCP preview
 

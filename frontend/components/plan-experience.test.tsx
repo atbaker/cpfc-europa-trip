@@ -27,7 +27,7 @@ const snapshot: Snapshot = {
 };
 
 describe("trip conversation", () => {
-  afterEach(() => { cleanup(); state.snapshot = null; });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); state.snapshot = null; });
 
   it("keeps the message box available while the session is open", async () => {
     state.snapshot = snapshot;
@@ -64,6 +64,5 @@ describe("trip conversation", () => {
     expect(checking.compareDocumentPosition(returning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText(/Comparing routes from/)).not.toBeInTheDocument();
     expect(screen.queryByText("Take the plan with you.")).not.toBeInTheDocument();
-    vi.unstubAllGlobals();
   });
 });

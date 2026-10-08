@@ -91,10 +91,14 @@ def create_app(
             await db.dispose()
 
     app = FastAPI(title="Eagles Away", version="0.1.0", lifespan=lifespan)
+    allowed_frontend_origins = {config.frontend_origin}
+    allowed_frontend_origins.update(
+        origin.strip() for origin in config.additional_frontend_origins.split(",") if origin.strip()
+    )
     if config.app_env in {"development", "test"}:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[config.frontend_origin],
+            allow_origins=sorted(allowed_frontend_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST"],
             allow_headers=["Content-Type", "X-Submission-Token"],
@@ -126,7 +130,7 @@ def create_app(
         if (
             request.method == "POST"
             and request.url.path.startswith("/api/")
-            and request.headers.get("origin") != config.frontend_origin
+            and request.headers.get("origin") not in allowed_frontend_origins
         ):
             return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         if int(request.headers.get("content-length", "0")) > 32000:

@@ -242,7 +242,8 @@ async def test_preview_serves_export_and_uses_secure_session_cookie(
     preview = settings.model_copy(
         update={
             "app_env": "preview",
-            "frontend_origin": "https://preview.example",
+            "frontend_origin": "https://eaglesaway.com",
+            "additional_frontend_origins": "https://preview.example",
             "static_export_dir": str(export),
             "preview_username": "previewer",
             "preview_password": SecretStr("private-preview-password"),
@@ -265,6 +266,14 @@ async def test_preview_serves_export_and_uses_secure_session_cookie(
         assert "Eagles Away preview" in (await client.get("/")).text
         assert "Your plan" in (await client.get("/plan/")).text
         assert (await client.get("/api/catalog")).status_code == 200
+        assert (
+            await client.post(
+                "/api/sessions", json={}, headers={"Origin": "https://eaglesaway.com"}
+            )
+        ).status_code == 422
+        assert (
+            await client.post("/api/sessions", json={}, headers={"Origin": "https://evil.example"})
+        ).status_code == 403
         response = await client.post(
             "/api/sessions",
             json={

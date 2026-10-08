@@ -1,5 +1,14 @@
 # Development notes
 
+## 8 October 2026 — generated preview URL POST failure
+
+- After `eaglesaway.com` became the App Platform primary domain, `${APP_URL}` resolved to that primary origin and the generated preview URL's POST requests returned 403 from the API origin guard. The API now supports an explicit `ADDITIONAL_FRONTEND_ORIGINS` list, with the generated preview URL as the sole additional hosted origin. The regression test accepts both trusted origins and rejects an unrelated one.
+- The full check passed: 91 Python tests, two PostgreSQL tests skipped by their fixture, 19 frontend tests, lint, typing and production build. The first unrestricted run exposed a frontend test that removed its `matchMedia` stub before cleanup; moving stub removal into `afterEach` resolved it. Hosted deployment and POST verification remain pending.
+
+## 7 October 2026 — custom domain registration
+
+- At the owner's request, DigitalOcean accepted `eaglesaway.com` as the primary domain for the existing protected preview. A sanitized spec passed validation. The domain remained `CONFIGURING` while its certificate awaited DNS ownership validation. Cloudflare DNS had no apex A or CNAME answer, and the dashboard required sign-in, so no DNS record was changed. The generated preview URL still returned 200 on `/healthz` and 401 on anonymous `/`. The remaining action is a DNS-only apex CNAME to the generated DigitalOcean hostname, followed by HTTPS and login-gate verification.
+
 ## 7 October 2026 — DigitalOcean live email preview
 
 - The owner approved the revised email format for the password-protected preview. DigitalOcean app deployment `91a13e43-ef9a-44f1-b5e3-84361fc687b8` built email-template commit `a1dcaf8` and reached `ACTIVE` with successful build, migration and deploy steps. `EMAIL_MODE=resend` is active, with the Resend sending key stored as a runtime-only secret. The custom domain was not changed.

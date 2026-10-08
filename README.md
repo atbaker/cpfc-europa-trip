@@ -17,7 +17,9 @@ The private preview runs at
 [eagles-away-preview-ifemt.ondigitalocean.app](https://eagles-away-preview-ifemt.ondigitalocean.app/)
 on DigitalOcean App Platform in Frankfurt: one web service, one continuously running Temporal
 worker, a migration job and PostgreSQL. HTTP Basic credentials protect the preview;
-`eaglesaway.com` remains unchanged. The earlier GCP review and current deployment evidence
+`eaglesaway.com` is registered as the app's primary custom domain, but its Cloudflare DNS
+record and HTTPS certificate are still pending. Use the generated preview URL until the
+domain is verified. The earlier GCP review and current deployment evidence
 are in the [deployment readiness record](planning/2026-10-06-deployment-readiness.md).
 
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
@@ -40,8 +42,10 @@ docker run --rm --entrypoint python -e PREVIEW_USERNAME=reviewer \
 The preview uses a migrated PostgreSQL database, encrypted runtime variables for contact and
 session keys, SearchApi, Temporal Cloud, and Gemini, plus a continuously running worker.
 `GOOGLE_AUTH_MODE=api_key` enables free-text briefs and follow-ups without local `gcloud`
-credentials. `FRONTEND_ORIGIN` resolves to the hosted origin so POST requests pass the origin
-check. The Resend sending key is a runtime-only App Platform secret. Signed delivery-status
+credentials. `FRONTEND_ORIGIN` resolves to the primary hosted origin;
+`ADDITIONAL_FRONTEND_ORIGINS` lists any other trusted browser origins, separated by commas.
+The DigitalOcean preview includes its generated `ondigitalocean.app` URL so POST requests work
+there while the custom domain is being set up. The Resend sending key is a runtime-only App Platform secret. Signed delivery-status
 webhooks are not configured, so the app records provider acceptance but cannot confirm inbox
 delivery or bounces.
 
