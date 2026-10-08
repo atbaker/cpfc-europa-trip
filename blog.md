@@ -3,6 +3,7 @@
 ## 8 October 2026 — transfer section spacing
 
 - The local-transfer heading touched the official-transfer card because the adjacent sections had no shared layout gap; only Maps cards had individual bottom margins. Both transfer sections now use one grid spacing rule, and the Maps-only margin is removed. `scripts/check.sh` passed with 91 Python tests, two PostgreSQL fixture skips, 19 frontend tests, lint, typing and production build. Hosted visual verification is pending deployment.
+- DigitalOcean deployment `f06d3f8f-b2d8-4112-9844-bf906bc4bd3e` built spacing commit `dcb46b1` and reached `ACTIVE`. An isolated rendered sample using the app's stylesheet and the Salzburg transfer content showed 16 px heading-to-card gaps and a 24 px gap between the two sections at both 1280 px and 390 px viewports, with no horizontal overflow. The user's existing Firefox plan tab was not reloaded during inspection.
 
 ## 8 October 2026 — generated preview URL POST failure
 
