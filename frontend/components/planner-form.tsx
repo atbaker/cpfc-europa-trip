@@ -11,7 +11,6 @@ export function PlannerForm() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const hasChangedStep = useRef(false);
   const attempt = useRef<{ id: string; token: string; body: string } | null>(null);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [originCities, setOriginCities] = useState<string[]>(["London"]);
@@ -20,6 +19,7 @@ export function PlannerForm() {
   const [transport, setTransport] = useState<Brief["transport_mode"]>(null);
   const [selected, setSelected] = useState("");
   const [step, setStep] = useState(0);
+  const [hasNavigated, setHasNavigated] = useState(false);
   const [budget, setBudget] = useState<Brief["budget_tier"]>("value");
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState<number[]>([]);
@@ -44,11 +44,11 @@ export function PlannerForm() {
   }, []);
 
   useEffect(() => {
-    if (hasChangedStep.current) headingRef.current?.focus();
-  }, [step]);
+    if (hasNavigated) headingRef.current?.focus();
+  }, [step, hasNavigated]);
 
   function moveTo(next: number) {
-    hasChangedStep.current = true;
+    setHasNavigated(true);
     setError("");
     setStep(next);
   }
@@ -123,7 +123,7 @@ export function PlannerForm() {
     <div className="section-heading"><span className="eyebrow">PLAN YOUR AWAY DAY</span><span className="tag">From {origin || "your city"}</span></div>
     <nav aria-label="Trip brief progress"><ol className="form-progress">{stepNames.map((name, index) => <li key={name} aria-current={step === index ? "step" : undefined} className={index < step ? "complete" : ""}><span className="step-number">{index < step ? "✓" : index + 1}</span><span>{name}</span></li>)}</ol></nav>
     {error && <p className="error" role="alert">{error}</p>}
-    <fieldset disabled={busy} className="form-pages">
+    <fieldset disabled={busy} className={hasNavigated ? "form-pages transitioning" : "form-pages"}>
       <section className="form-page" data-form-step="0" hidden={step !== 0} aria-labelledby={step === 0 ? "form-step-heading" : undefined}>
         <h2 id={step === 0 ? "form-step-heading" : undefined} ref={step === 0 ? headingRef : undefined} tabIndex={-1}>Which match are you going to?</h2>
         <p className="form-help">Choose where you’ll start and the away match you’re going to.</p>

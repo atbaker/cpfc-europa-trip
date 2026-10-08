@@ -1,5 +1,12 @@
 # Development notes
 
+## 8 October 2026 — responsive visual audit
+
+- Rendered the home form, privacy page, and connecting, waiting, partial, ready, complete, failed, and emailed plan states with representative local snapshots at 1280 × 800 and 390 × 844, plus narrow 320 × 700 checks. The completed itinerary was inspected through its footer. The state record is in `planning/2026-10-08-ui-audit.md`. These fixtures do not verify live prices or providers.
+- The completed itinerary lacked the 32 px separation used by waiting and partial plans; their following session note also touched the card. A shared plan spacing rule now covers all three, and the note has a 16 px gap. The privacy card now observes the mobile page gutter and its heading has a 16 px body gap. Narrow mobile progress labels use separate columns; below 360 px the decorative route arc yields to readable city names. Unused secondary-button CSS was removed.
+- The form section reveal now runs only after navigation, leaving the initial form visible immediately. During the 450 ms ready beat, the email action waits until the itinerary is revealed. Browser checks observed the ready beat without the action and the settled itinerary with it. No horizontal page overflow was observed in the checked widths; browser console warnings and errors were empty on the form view.
+- `scripts/check.sh` passed: 91 Python tests, two PostgreSQL fixture skips, 19 frontend tests, Ruff, mypy, generated API schema comparison, TypeScript, ESLint, and production build. An initial gate run caught a React lint rule against reading a ref during render; the navigation flag was moved to state and the gate was rerun successfully. Hosted preview deployment is pending.
+
 ## 8 October 2026 — remove plan-page conversation
 
 - The owner found the Fine-tune your away day panel unhelpful and asked to remove it. The frontend no longer renders the transcript, follow-up form, pending-message state or closed-conversation panel. Unused conversation CSS and the inline progress variant were removed. The saved itinerary, email action and a simple new-brief link for ended sessions remain. The backend message endpoint and stored transcripts remain for existing-session compatibility; no new follow-up can be sent from the website. The session note no longer mentions a message limit.
