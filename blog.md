@@ -151,4 +151,5 @@
 ## 8 October 2026 — duplicate email disclaimers
 
 - A received itinerary email repeated price and excluded-ticket/departure-hub cautions because the saved itinerary caveats and the email template each supplied a version. Removed the template-only pair from HTML and plain text; the saved caveats remain. Failed-search emails still explain that no travel was booked.
-- A regression test reproduced two instances of “Prices may have changed” before the fix, then passed with one instance in each format. `scripts/check.sh` passed with 92 Python tests, two PostgreSQL fixture skips, 21 frontend tests, Ruff, mypy, API schema comparison, TypeScript, ESLint and static build. Preview deployment and a newly delivered email are not yet verified.
+- A regression test reproduced two instances of “Prices may have changed” before the fix, then passed with one instance in each format. `scripts/check.sh` passed with 92 Python tests, two PostgreSQL fixture skips, 21 frontend tests, Ruff, mypy, API schema comparison, TypeScript, ESLint and static build.
+- DigitalOcean deployment `efddd9d8-fd40-42a9-92f1-b0073b19823c` reached `ACTIVE`; hosted `/healthz` returned 200 and anonymous `/` returned 401. No new email was sent for this verification, so actual inbox rendering of the revised copy remains unverified.
