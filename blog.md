@@ -4,6 +4,7 @@
 
 - After `eaglesaway.com` became the App Platform primary domain, `${APP_URL}` resolved to that primary origin and the generated preview URL's POST requests returned 403 from the API origin guard. The API now supports an explicit `ADDITIONAL_FRONTEND_ORIGINS` list, with the generated preview URL as the sole additional hosted origin. The regression test accepts both trusted origins and rejects an unrelated one.
 - The full check passed: 91 Python tests, two PostgreSQL tests skipped by their fixture, 19 frontend tests, lint, typing and production build. The first unrestricted run exposed a frontend test that removed its `matchMedia` stub before cleanup; moving stub removal into `afterEach` resolved it. Hosted deployment and POST verification remain pending.
+- A configuration-only DigitalOcean update reused old source commit `a1dcaf8`, so the first hosted POST check still returned 403 from the generated preview URL. Redeploying with `--update-sources` built commit `5c0c17a`; deployment `36394aef-26bc-4f1d-b002-fc8e6004e2bc` reached `ACTIVE`. The generated preview URL returned 200 for health and authenticated home, 401 for anonymous home, 422 for invalid POSTs from both trusted origins, and 403 for an unrelated origin. Valid trip creation was not retested; public apex DNS remained unset at verification.
 
 ## 7 October 2026 — custom domain registration
 
