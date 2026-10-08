@@ -54,32 +54,21 @@
     }
   ],
   "origin_cities": [
-    "Aberdeen",
     "Belfast",
     "Birmingham",
-    "Bournemouth",
     "Bristol",
-    "Cardiff",
     "Edinburgh",
-    "Exeter",
     "Glasgow",
-    "Inverness",
-    "Leeds",
     "Liverpool",
     "London",
     "Manchester",
-    "Newcastle",
-    "Norwich",
-    "Nottingham",
-    "Southampton"
+    "Newcastle"
   ],
   "rail_cities": [
     "London",
     "Birmingham",
     "Bristol",
-    "Cardiff",
     "Edinburgh",
-    "Leeds",
     "Liverpool",
     "Manchester",
     "Newcastle"

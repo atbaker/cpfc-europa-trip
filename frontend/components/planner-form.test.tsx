@@ -35,6 +35,20 @@ describe("trip brief steps", () => {
     expect(screen.getByRole("radio", { name: /Beşiktaş J.K./ })).toBeChecked();
   });
 
+  it("keeps the same major-airport city list for every match", async () => {
+    render(<PlannerForm />);
+    const origin = screen.getByRole("combobox", { name: /Starting from/ });
+    expect(screen.queryByRole("option", { name: "Bournemouth" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Bristol" })).toBeInTheDocument();
+    fireEvent.change(origin, { target: { value: "Manchester" } });
+    fireEvent.click(screen.getByRole("radio", { name: /Beşiktaş J.K./ }));
+    expect(origin).toHaveValue("Manchester");
+    expect(screen.getByRole("option", { name: "Bristol" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /Jagiellonia Białystok/ }));
+    expect(origin).toHaveValue("Manchester");
+    await act(async () => { await Promise.resolve(); });
+  });
+
   it("keeps existing trip choices when moving forward and back", async () => {
     render(<PlannerForm />);
     await screen.findByRole("radio", { name: /Olympique Lyonnais/ });

@@ -29,7 +29,7 @@ from temporalio.service import RPCError
 from cpfc_trip.catalog import load_catalog
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import Command, CreateSession, MessageCommand, Receipt, Snapshot
-from cpfc_trip.origins import UK_ORIGINS, UK_RAIL
+from cpfc_trip.origins import LIVE_ORIGINS, UK_RAIL
 from cpfc_trip.persistence.database import engine
 from cpfc_trip.persistence.models import DeliveryRow, WebhookRow
 from cpfc_trip.persistence.repository import Repository
@@ -176,8 +176,8 @@ def create_app(
         return {
             "fixtures": fixtures,
             "origin": "London",
-            "origin_cities": sorted(UK_ORIGINS),
-            "rail_cities": ["London", *sorted(UK_RAIL)],
+            "origin_cities": LIVE_ORIGINS,
+            "rail_cities": ["London", *(city for city in sorted(UK_RAIL) if city in LIVE_ORIGINS)],
             "development_mode": config.planner_mode == "recorded",
         }
 

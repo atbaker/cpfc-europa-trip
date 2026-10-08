@@ -39,6 +39,21 @@ UK_RAIL: dict[str, tuple[str, str, str]] = {
     "Newcastle": ("Newcastle upon Tyne", "Newcastle", "King’s Cross"),
 }
 
+# Fixed preview list. Each city's supported airport handled at least 5 million
+# passengers in the CAA April 2024–March 2025 table. This is a connectivity
+# filter, not a promise of a dated flight for every match.
+LIVE_ORIGINS: tuple[str, ...] = (
+    "Belfast",
+    "Birmingham",
+    "Bristol",
+    "Edinburgh",
+    "Glasgow",
+    "Liverpool",
+    "London",
+    "Manchester",
+    "Newcastle",
+)
+
 LONDON_TRANSFER = TransferGuidance(
     title="Changing stations in London",
     description=(

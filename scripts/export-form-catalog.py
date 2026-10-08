@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from cpfc_trip.catalog import load_catalog
-from cpfc_trip.origins import UK_ORIGINS, UK_RAIL
+from cpfc_trip.origins import LIVE_ORIGINS, UK_RAIL
 
 OUTPUT = Path(__file__).resolve().parents[1] / "frontend/lib/form-catalog.json"
 
@@ -14,12 +14,11 @@ def render_catalog() -> str:
     """Render choices from the same fixtures and origins used by the API."""
     fixtures, routes = load_catalog()
     enabled_ids = {route.fixture_id for route in routes if route.enabled}
+    enabled_fixtures = [fixture for fixture in fixtures if fixture.id in enabled_ids]
     data = {
-        "fixtures": [
-            fixture.model_dump(mode="json") for fixture in fixtures if fixture.id in enabled_ids
-        ],
-        "origin_cities": sorted(UK_ORIGINS),
-        "rail_cities": ["London", *sorted(UK_RAIL)],
+        "fixtures": [fixture.model_dump(mode="json") for fixture in enabled_fixtures],
+        "origin_cities": LIVE_ORIGINS,
+        "rail_cities": ["London", *(city for city in sorted(UK_RAIL) if city in LIVE_ORIGINS)],
     }
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 

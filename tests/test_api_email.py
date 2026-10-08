@@ -94,6 +94,39 @@ async def test_session_uses_selected_departure_airports(repository, session_inpu
     assert {route.origin for route in data.routes} == {"MAN", "Manchester"}
 
 
+async def test_live_catalog_only_offers_major_airport_cities(settings, repository) -> None:
+    """The live brief uses the same fixed airport-city list for every match."""
+    app = create_app(settings.model_copy(update={"planner_mode": "live"}), repository, AsyncMock())
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.get("/api/catalog")
+    assert response.status_code == 200
+    assert response.json()["origin_cities"] == [
+        "Belfast",
+        "Birmingham",
+        "Bristol",
+        "Edinburgh",
+        "Glasgow",
+        "Liverpool",
+        "London",
+        "Manchester",
+        "Newcastle",
+    ]
+    assert "origin_cities_by_fixture" not in response.json()
+
+
+async def test_live_session_rejects_removed_departure_city(repository) -> None:
+    """Direct API submissions cannot bypass the live form's airport-city list."""
+    repository.settings = repository.settings.model_copy(update={"planner_mode": "live"})
+    brief = Brief(fixture_ids=("uel-2026-besiktas-away",), origin_city="Bournemouth")
+    with pytest.raises(ValueError, match="not currently supported for live planning"):
+        await repository.create(
+            CreateSession(submission_id=uuid4(), email="supporter@example.com", brief=brief),
+            "x" * 64,
+        )
+
+
 async def test_unsupported_train_city_and_city_fail_before_search(repository, session_input):
     brief = session_input.brief.model_copy(
         update={"origin_city": "Manchester", "transport_mode": "rail"}
