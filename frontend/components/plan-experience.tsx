@@ -6,16 +6,12 @@ import { ApiError, Snapshot, newer, request, terminal } from "../lib/api";
 import { ItineraryView, JourneyPreview } from "./itinerary-view";
 import { PlanningProgress } from "./planning-progress";
 
-type Pending = { id: string; text: string; accepted: boolean };
 export function PlanExperience() {
   const params = useSearchParams();
   const session = params.get("session");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const current = useRef<Snapshot | null>(null);
   const [error, setError] = useState("");
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const finalizeId = useRef<string | null>(null);
   const [city] = useState<string | undefined>(() => {
@@ -40,8 +36,6 @@ export function PlanExperience() {
         const data = await request<Snapshot>(`/api/sessions/${session}/snapshot${revision === undefined ? "" : `?after_revision=${revision}`}`);
         if (stopped) return;
         current.current = newer(current.current, data); setSnapshot(current.current); setError(""); failures = 0;
-        const canonical = current.current;
-        setPending(p => p && canonical?.transcript_tail.some(t => t.turn_id === p.id && t.role === "assistant") ? null : p);
       } catch (e) {
         if (stopped) return;
         failures++;
@@ -75,14 +69,6 @@ export function PlanExperience() {
     }
     hadItinerary.current = hasItinerary;
   }, [hasItinerary]);
-  async function send(command: Pending) {
-    setSending(true); setPending(command); setError("");
-    try {
-      await request(`/api/sessions/${session}/messages`, { method: "POST", body: JSON.stringify({ id: command.id, text: command.text }) });
-      setPending(p => p?.id === command.id ? { ...p, accepted: true } : p); setText(""); refresh.current();
-    } catch (e) { setError(e instanceof Error ? e.message : "Please retry this message."); }
-    finally { setSending(false); }
-  }
   async function finalize() {
     setFinalizing(true); finalizeId.current ??= crypto.randomUUID();
     try { await request(`/api/sessions/${session}/finalize`, { method: "POST", body: JSON.stringify({ id: finalizeId.current }) }); refresh.current(); }
@@ -100,16 +86,10 @@ export function PlanExperience() {
     {snapshot?.preview_trip && !snapshot.itinerary && !terminal(snapshot) && <JourneyPreview trip={snapshot.preview_trip}><PlanningProgress snapshot={snapshot} city={snapshot.preview_trip.fixture.city} origin={origin} variant="preview" /></JourneyPreview>}
     {completing && <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" forceDone />}
     {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. <Link href="/">Try another trip brief <span className="arrow">→</span></Link></p>}
-    {snapshot?.itinerary && !completing && <div className={`plan-reveal${pending?.accepted ? " revising" : ""}`}><ItineraryView itinerary={snapshot.itinerary} /></div>}
-    {!!snapshot?.transcript_tail.length && <section className="conversation panel" aria-label="Your conversation"><h2>{closed ? "Your trip conversation" : "Fine-tune your away day"}</h2>{snapshot.transcript_tail.map(turn => <div key={turn.id} className={`message ${turn.role}`}><strong>{turn.role === "user" ? "You" : "Your trip planner"}</strong><p>{turn.content}</p></div>)}
-      {pending && !snapshot.transcript_tail.some(t => t.turn_id === pending.id && t.role === "user") && <div className="message user"><strong>You · pending</strong><p>{pending.text}</p></div>}
-      {pending && (pending.accepted ? <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="inline" /> : <p role="status">Awaiting confirmation…</p>)}
-      {pending && !pending.accepted && !sending && !closed && <button onClick={() => void send(pending)}>Retry this message</button>}
-      {!closed && <form onSubmit={e => { e.preventDefault(); if (text.trim() && !pending) void send({ id: crypto.randomUUID(), text: text.trim(), accepted: false }); }}><label htmlFor="message">Ask a question or change your trip</label><textarea id="message" value={text} onChange={e => setText(e.target.value)} maxLength={2000} rows={3} disabled={!!pending || sending} /><div className="section-heading"><small>{snapshot.follow_ups_remaining} follow-ups remaining</small><button disabled={!!pending || sending || !text.trim()} className="secondary">Send message <span className="arrow">↑</span></button></div></form>}
-      {closed && <div className="notice conversation-closed">{terminal(snapshot) ? "This planning session has ended. Messages are closed." : "We’re preparing your email, so messages are closed."} <Link href="/">Start a new trip brief <span className="arrow">→</span></Link></div>}
-    </section>}
+    {snapshot?.itinerary && !completing && <div className="plan-reveal"><ItineraryView itinerary={snapshot.itinerary} /></div>}
     {snapshot?.itinerary && !terminal(snapshot) && <div className="send-bar"><div><strong>Take the plan with you.</strong><small>We’ll email this saved version. Prices aren’t checked again.</small></div><button className="primary" disabled={closed} onClick={() => void finalize()}>{closed ? "Preparing your email…" : <>Send me my itinerary <span className="arrow">→</span></>}</button></div>}
+    {snapshot?.itinerary && terminal(snapshot) && <p className="fine">This planning session has ended. <Link href="/">Start a new trip brief <span className="arrow">→</span></Link></p>}
     {snapshot?.email_provider_id?.startsWith("preview-") && <div className="notice">Development email preview saved locally. No email was sent.</div>}
-    {snapshot && !closed && <p className="fine">This short session automatically emails your saved plan after inactivity, or when its time or message limit is reached.</p>}
+    {snapshot && !closed && <p className="fine">This short session automatically emails your saved plan after inactivity or when its time limit is reached.</p>}
   </div>;
 }

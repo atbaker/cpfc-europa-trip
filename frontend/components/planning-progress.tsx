@@ -32,11 +32,11 @@ export function PlanningProgress({ snapshot, city, origin = "London", variant = 
   snapshot: Snapshot | null;
   city?: string;
   origin?: string;
-  variant?: "hero" | "inline" | "preview";
+  variant?: "hero" | "preview";
   forceDone?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const stage: Stage = forceDone ? "done" : stageFor(snapshot, { ignoreItinerary: variant !== "hero" });
+  const stage: Stage = forceDone ? "done" : stageFor(snapshot, { ignoreItinerary: variant === "preview" });
   const lines = variant === "preview" ? [
     city ? `Checking places to stay in ${city}…` : "Checking places to stay…",
     "Comparing available rooms and prices…",
@@ -45,9 +45,8 @@ export function PlanningProgress({ snapshot, city, origin = "London", variant = 
   const index = useTicker((stage === "preferences" || stage === "searching") && !reduced, lines.length);
   const rotatingText = lines[index];
 
-  if (variant !== "hero") {
-    const text = variant === "preview" || stage === "searching" ? rotatingText : "Updating your plan…";
-    return <p className="ticker inline" aria-hidden="true"><span key={reduced ? "static" : index} className={reduced ? undefined : "tfade"}>{text}</span></p>;
+  if (variant === "preview") {
+    return <p className="ticker inline" aria-hidden="true"><span key={reduced ? "static" : index} className={reduced ? undefined : "tfade"}>{rotatingText}</span></p>;
   }
 
   const destination = city ?? "the away end";

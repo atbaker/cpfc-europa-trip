@@ -151,17 +151,6 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .notice ul { margin-bottom: 0; padding-left: 21px; }
 .trip details { margin-top: 18px; }
 .trip details section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.conversation { margin: var(--space-4) 0; padding: var(--panel-padding); }
-.conversation > h2 { margin-bottom: var(--space-2); }
-.conversation > h2 + .message { padding-top: 0; }
-.conversation form { margin-top: var(--space-3); }
-.conversation form label { margin-top: 0; }
-.conversation form .section-heading { margin-top: var(--space-2); }
-.conversation-closed { margin: var(--space-3) 0 0; }
-.message { padding: 13px 0; border-bottom: 1px solid var(--line); font-size: 14px; white-space: pre-wrap; }
-.message strong { color: var(--blue); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-.message.user { padding-left: 18px; border-left: 3px solid var(--line); }
-.message p { margin: 5px 0; }
 .send-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0 var(--space-3); padding: var(--panel-padding); border-left: 5px solid var(--red); border-radius: 8px; background: var(--ink); color: #fff; }
 .send-bar small { max-width: 420px; margin-top: 4px; color: #d6e0ed; }
 .send-bar .primary { flex-shrink: 0; }
@@ -196,7 +185,6 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .journey-plane { position: absolute; top: 7px; left: 50%; transform: translateX(-50%) rotate(8deg); color: var(--red); font-size: 24px; animation: cpfc-float 2.5s ease-in-out infinite; }
 .journey-note { margin: 0; padding-top: 13px; border-top: 1px solid #dbe8f2; color: var(--muted); font-size: 14px; }
 .plan-reveal { animation: cpfc-fade .35s ease; }
-.plan-reveal.revising { animation: cpfc-pulse 1.4s ease-in-out infinite; }
 
 @media (max-width: 900px) {
   .home { grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: 680px; padding-top: 30px; }
@@ -228,8 +216,6 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
   .plan { padding: var(--space-3) var(--page-gutter) var(--space-5); }
   .plan.panel { margin-top: var(--space-3); }
   .plan-heading .tag { display: none; }
-  .conversation form .section-heading { align-items: stretch; flex-direction: column; }
-  .conversation form .secondary { width: 100%; }
   .send-bar { flex-direction: column; align-items: stretch; }
   .send-bar .primary { width: 100%; }
   .journey-route { grid-template-columns: minmax(72px, auto) minmax(40px, 1fr) minmax(72px, auto); gap: 6px; }

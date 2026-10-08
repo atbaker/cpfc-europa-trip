@@ -26,23 +26,22 @@ const snapshot: Snapshot = {
   email_status: "not_requested",
 };
 
-describe("trip conversation", () => {
+describe("trip plan", () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); state.snapshot = null; });
 
-  it("keeps the message box available while the session is open", async () => {
+  it("shows the saved plan without the follow-up panel", async () => {
     state.snapshot = snapshot;
     render(<PlanExperience />);
-    expect(await screen.findByRole("heading", { name: "Fine-tune your away day" })).toBeVisible();
-    expect(screen.getByRole("textbox", { name: "Ask a question or change your trip" })).toBeVisible();
+    expect(await screen.findByText("Take the plan with you.")).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Your conversation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Ask a question or change your trip" })).not.toBeInTheDocument();
   });
 
-  it("explains why the message box is gone after the session ends", async () => {
+  it("offers a new brief after the session ends without a conversation panel", async () => {
     state.snapshot = { ...snapshot, phase: "emailed", progress_message: "Your email has been prepared." };
     render(<PlanExperience />);
-    expect(await screen.findByRole("heading", { name: "Your trip conversation" })).toBeVisible();
-    expect(screen.queryByRole("textbox", { name: "Ask a question or change your trip" })).not.toBeInTheDocument();
-    expect(screen.getByText(/Messages are closed/)).toBeVisible();
-    expect(screen.getByRole("link", { name: /Start a new trip brief/ })).toHaveAttribute("href", "/");
+    expect(await screen.findByRole("link", { name: /Start a new trip brief/ })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("region", { name: "Your conversation" })).not.toBeInTheDocument();
   });
 
   it("shows a checked journey as an incomplete preview while hotels are pending", async () => {

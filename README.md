@@ -41,7 +41,7 @@ docker run --rm --entrypoint python -e PREVIEW_USERNAME=reviewer \
 
 The preview uses a migrated PostgreSQL database, encrypted runtime variables for contact and
 session keys, SearchApi, Temporal Cloud, and Gemini, plus a continuously running worker.
-`GOOGLE_AUTH_MODE=api_key` enables free-text briefs and follow-ups without local `gcloud`
+`GOOGLE_AUTH_MODE=api_key` enables free-text briefs without local `gcloud`
 credentials. `FRONTEND_ORIGIN` resolves to the primary hosted origin;
 `ADDITIONAL_FRONTEND_ORIGINS` lists any other trusted browser origins, separated by commas.
 The DigitalOcean preview includes its generated `ondigitalocean.app` URL so POST requests work
