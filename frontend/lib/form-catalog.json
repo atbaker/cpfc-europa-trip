@@ -1,0 +1,87 @@
+{
+  "fixtures": [
+    {
+      "id": "uel-2026-lyon-away",
+      "opponent": "Olympique Lyonnais",
+      "city": "Lyon",
+      "timezone": "Europe/Paris",
+      "kickoff_at": "2026-10-15T16:45:00Z",
+      "venue": "Parc Olympique Lyonnais",
+      "venue_location": "Décines-Charpieu, France",
+      "venue_status": "provisional",
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1"
+    },
+    {
+      "id": "uel-2026-besiktas-away",
+      "opponent": "Beşiktaş J.K.",
+      "city": "Istanbul",
+      "timezone": "Europe/Istanbul",
+      "kickoff_at": "2026-10-22T19:00:00Z",
+      "venue": "Tüpraş Stadium",
+      "venue_location": "Istanbul, Türkiye",
+      "venue_status": "provisional",
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1"
+    },
+    {
+      "id": "uel-2026-jagiellonia-away",
+      "opponent": "Jagiellonia Białystok",
+      "city": "Białystok",
+      "timezone": "Europe/Warsaw",
+      "kickoff_at": "2026-12-10T17:45:00Z",
+      "venue": "Bialystok City Stadium",
+      "venue_location": "Białystok, Poland",
+      "venue_status": "provisional",
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1"
+    },
+    {
+      "id": "uel-2026-salzburg-away",
+      "opponent": "FC Red Bull Salzburg",
+      "city": "Salzburg",
+      "timezone": "Europe/Vienna",
+      "kickoff_at": "2027-01-28T20:00:00Z",
+      "venue": "Red Bull Arena",
+      "venue_location": "Kleßheim, Austria",
+      "venue_status": "provisional",
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1"
+    }
+  ],
+  "origin_cities": [
+    "Aberdeen",
+    "Belfast",
+    "Birmingham",
+    "Bournemouth",
+    "Bristol",
+    "Cardiff",
+    "Edinburgh",
+    "Exeter",
+    "Glasgow",
+    "Inverness",
+    "Leeds",
+    "Liverpool",
+    "London",
+    "Manchester",
+    "Newcastle",
+    "Norwich",
+    "Nottingham",
+    "Southampton"
+  ],
+  "rail_cities": [
+    "London",
+    "Birmingham",
+    "Bristol",
+    "Cardiff",
+    "Edinburgh",
+    "Leeds",
+    "Liverpool",
+    "Manchester",
+    "Newcastle"
+  ]
+}

@@ -1,21 +1,39 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PlannerForm } from "./planner-form";
 import { request } from "../lib/api";
+import formCatalog from "../lib/form-catalog.json";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("../lib/api", async importOriginal => ({
   ...(await importOriginal<typeof import("../lib/api")>()),
-  request: vi.fn(async () => ({ fixtures: [
-    { id: "lyon", opponent: "Olympique Lyonnais", city: "Lyon", venue: "Parc Olympique Lyonnais", kickoff_at: "2026-10-15T16:45:00Z" },
-    { id: "besiktas", opponent: "Beşiktaş J.K.", city: "Istanbul", venue: "Tüpraş Stadium", kickoff_at: "2026-10-22T19:00:00Z" },
-    { id: "jagiellonia", opponent: "Jagiellonia Białystok", city: "Białystok", venue: "Białystok City Stadium", kickoff_at: "2026-12-10T17:45:00Z" },
-    { id: "salzburg", opponent: "FC Red Bull Salzburg", city: "Salzburg", venue: "Red Bull Arena", kickoff_at: "2027-01-28T20:00:00Z" },
-  ], origin_cities: ["London", "Manchester", "Belfast"], rail_cities: ["London", "Manchester"], development_mode: false })),
+  request: vi.fn(async () => ({ ...(await import("../lib/form-catalog.json")).default, development_mode: false })),
 }));
 
 describe("trip brief steps", () => {
   afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
+
+  it("shows all city and match choices before the catalog request completes", async () => {
+    vi.mocked(request).mockImplementationOnce(() => new Promise<never>(() => {}));
+    render(<PlannerForm />);
+    expect(screen.getByRole("combobox", { name: /Starting from/ })).toHaveValue("London");
+    expect(screen.getByRole("option", { name: "Manchester" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Olympique Lyonnais/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /FC Red Bull Salzburg/ })).toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); });
+  });
+
+  it("keeps a match chosen while the catalog request is pending", async () => {
+    let finishRequest!: () => void;
+    vi.mocked(request).mockImplementationOnce(async () => {
+      await new Promise<void>(resolve => { finishRequest = resolve; });
+      return { ...formCatalog, development_mode: false } as never;
+    });
+    render(<PlannerForm />);
+    fireEvent.click(screen.getByRole("radio", { name: /Beşiktaş J.K./ }));
+    await act(async () => { finishRequest(); });
+    expect(screen.getByRole("radio", { name: /Beşiktaş J.K./ })).toBeChecked();
+  });
 
   it("keeps existing trip choices when moving forward and back", async () => {
     render(<PlannerForm />);
@@ -72,6 +90,6 @@ describe("trip brief steps", () => {
     fireEvent.click(screen.getByRole("button", { name: /Plan my away day/ }));
     await waitFor(() => expect(vi.mocked(request).mock.calls.some(([path]) => path === "/api/sessions")).toBe(true));
     const submission = vi.mocked(request).mock.calls.find(([path]) => path === "/api/sessions");
-    expect(JSON.parse(String(submission?.[1]?.body)).brief.fixture_ids).toEqual(["besiktas"]);
+    expect(JSON.parse(String(submission?.[1]?.body)).brief.fixture_ids).toEqual(["uel-2026-besiktas-away"]);
   });
 });

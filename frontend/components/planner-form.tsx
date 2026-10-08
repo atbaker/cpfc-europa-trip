@@ -4,20 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Brief, Fixture, londonDayBoundary, request } from "../lib/api";
+import formCatalog from "../lib/form-catalog.json";
 
 const stepNames = ["Match & dates", "Travel preferences", "Your details"] as const;
+const bundledFixtures = formCatalog.fixtures as Fixture[];
+
+function selectedOrFirst(current: string, available: Fixture[]): string {
+  return available.some(f => f.id === current) ? current : available[0]?.id ?? "";
+}
 
 export function PlannerForm() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const attempt = useRef<{ id: string; token: string; body: string } | null>(null);
-  const [fixtures, setFixtures] = useState<Fixture[]>([]);
-  const [originCities, setOriginCities] = useState<string[]>(["London"]);
-  const [railCities, setRailCities] = useState<string[]>(["London"]);
+  const [fixtures, setFixtures] = useState<Fixture[]>(bundledFixtures);
+  const [originCities, setOriginCities] = useState<string[]>(formCatalog.origin_cities);
+  const [railCities, setRailCities] = useState<string[]>(formCatalog.rail_cities);
   const [origin, setOrigin] = useState("London");
   const [transport, setTransport] = useState<Brief["transport_mode"]>(null);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(bundledFixtures[0]?.id ?? "");
   const [step, setStep] = useState(0);
   const [hasNavigated, setHasNavigated] = useState(false);
   const [budget, setBudget] = useState<Brief["budget_tier"]>("value");
@@ -29,6 +35,13 @@ export function PlannerForm() {
 
   useEffect(() => {
     let cancelled = false;
+    // The static HTML and first hydration render share the same catalog; prune past games afterward.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const upcomingBundled = bundledFixtures.filter(f => new Date(f.kickoff_at) > new Date());
+      setFixtures(upcomingBundled);
+      setSelected(current => selectedOrFirst(current, upcomingBundled));
+    });
     request<{ fixtures: Fixture[]; origin_cities: string[]; rail_cities: string[]; development_mode: boolean }>("/api/catalog")
       .then(data => {
         if (cancelled || !data) return;
@@ -36,7 +49,7 @@ export function PlannerForm() {
         setFixtures(upcoming);
         setOriginCities(data.origin_cities ?? ["London"]);
         setRailCities(data.rail_cities ?? ["London"]);
-        setSelected(upcoming[0]?.id ?? "");
+        setSelected(current => selectedOrFirst(current, upcoming));
         setSample(data.development_mode);
       })
       .catch(() => { if (!cancelled) setError("The planner is unavailable. Please reload to try again."); });
