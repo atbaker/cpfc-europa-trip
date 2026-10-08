@@ -109,7 +109,7 @@ export function PlannerForm() {
       })(),
       private_room: form.get("private_room") === "on",
       private_bathroom: form.get("private_bathroom") === "on",
-      transport_mode: transport,
+      transport_mode: railAvailable ? transport : "flight",
       extra_instructions: String(form.get("instructions") ?? ""),
     };
     const content = JSON.stringify({ email: form.get("email"), brief });
@@ -122,15 +122,15 @@ export function PlannerForm() {
         body: JSON.stringify({ submission_id: attempt.current.id, ...JSON.parse(content) }),
       });
       if (result) {
-        const chosen = fixtures.find(f => f.id === selected);
-        try { if (chosen) sessionStorage.setItem(`cpfc-city-${result.public_session_id}`, chosen.city); } catch { /* ignore */ }
+        try { if (selectedFixture) sessionStorage.setItem(`cpfc-city-${result.public_session_id}`, selectedFixture.city); } catch { /* ignore */ }
         router.push(`/plan/?session=${result.public_session_id}`);
       }
     } catch (e) { setError(e instanceof Error ? e.message : "Please retry."); }
     finally { setBusy(false); }
   }
 
-  const railAvailable = railCities.includes(origin) && fixtures.find(f => f.id === selected)?.city === "Lyon";
+  const selectedFixture = fixtures.find(f => f.id === selected);
+  const railAvailable = railCities.includes(origin) && selectedFixture?.city === "Lyon";
   return <form ref={formRef} className="brief panel" onSubmit={submit}>
     {sample && <div className="notice">Development preview · Synthetic trips and prices · No email is sent</div>}
     <div className="section-heading"><span className="eyebrow">PLAN YOUR AWAY DAY</span><span className="tag">From {origin || "your city"}</span></div>
@@ -141,9 +141,9 @@ export function PlannerForm() {
         <h2 id={step === 0 ? "form-step-heading" : undefined} ref={step === 0 ? headingRef : undefined} tabIndex={-1}>Which match are you going to?</h2>
         <p className="form-help">Choose where you’ll start and the away match you’re going to.</p>
         {!sample && <p className="fine">Live planning covers these four away matches for adults sharing one room. Routes depend on dated travel results.</p>}
-        <label>Starting from<span className="select-wrap"><select name="origin_city" value={origin} onChange={event => { setOrigin(event.target.value); setTransport(railCities.includes(event.target.value) ? null : "flight"); }} required={step === 0}>{originCities.map(city => <option key={city} value={city}>{city}</option>)}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
+        <label>Starting from<span className="select-wrap"><select name="origin_city" value={origin} onChange={event => { setOrigin(event.target.value); setTransport(null); }} required={step === 0}>{originCities.map(city => <option key={city} value={city}>{city}</option>)}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
         <p className="fine">Choose a UK city with a major international airport. We’ll check dated flights, including suitable connections, and any available train route. A route for every match isn’t guaranteed.</p>
-        <fieldset><legend>Choose your away match</legend><div className="fixtures">{fixtures.map(f => <label key={f.id} className={`fixture ${selected === f.id ? "selected" : ""}`}><input type="radio" name="fixture" value={f.id} checked={selected === f.id} onChange={() => { setSelected(f.id); setTransport(railCities.includes(origin) && f.city === "Lyon" ? null : "flight"); }} /><span><strong>{f.opponent}</strong><small>{new Date(f.kickoff_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })} · {f.venue}, {f.venue_location || f.city}</small><small>UEFA Europa League</small></span></label>)}</div></fieldset>
+        <fieldset><legend>Choose your away match</legend><div className="fixtures">{fixtures.map(f => <label key={f.id} className={`fixture ${selected === f.id ? "selected" : ""}`}><input type="radio" name="fixture" value={f.id} checked={selected === f.id} onChange={() => { setSelected(f.id); setTransport(null); }} /><span><strong>{f.opponent}</strong><small>{new Date(f.kickoff_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })} · {f.venue}, {f.venue_location || f.city}</small><small>UEFA Europa League</small></span></label>)}</div></fieldset>
         <label>Time around the match<span className="select-wrap"><select name="flexibility" defaultValue="day_either_side"><option value="day_either_side">A day either side</option><option value="two_days">Up to two days either side</option><option value="tight">A short trip</option></select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
         <details><summary>Choose specific travel dates instead</summary><p className="fine">Enter both dates for the match. Otherwise, we’ll use the time you chose above. Dates use London time.</p>{fixtures.filter(f => f.id === selected).map(f => <fieldset key={f.id} className="date-group"><legend>{f.opponent}</legend><div className="grid-two"><label>Earliest departure<input type="date" name={`start-${f.id}`} /></label><label>Latest return<input type="date" name={`end-${f.id}`} /></label></div></fieldset>)}</details>
         <div className="form-actions"><button type="button" className="primary" onClick={nextStep}>Continue to travel preferences <span className="arrow">→</span></button></div>
@@ -155,7 +155,8 @@ export function PlannerForm() {
         <div className="grid-two"><label>Adults<input type="number" min="1" max="8" value={adults} onChange={e => setAdults(Number(e.target.value))} required={step === 1} /></label><label>Rooms<input name="rooms" type="number" min="1" max={sample ? 4 : 1} defaultValue="1" required={step === 1} /></label></div>
         {sample && <label>Children<span className="select-wrap"><select value={children.length} onChange={e => setChildren(Array.from({ length: Number(e.target.value) }, (_, i) => children[i] ?? 8))}>{Array.from({ length: 7 }, (_, i) => <option key={i} value={i}>{i}</option>)}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>}
         {!!children.length && <div className="grid-two">{children.map((age, i) => <label key={i}>Child {i + 1} age<input type="number" min="0" max="17" value={age} onChange={e => setChildren(children.map((a, n) => n === i ? Number(e.target.value) : a))} required={step === 1} /></label>)}</div>}
-        <label>Travel by<span className="select-wrap"><select name="transport" value={transport ?? ""} onChange={event => setTransport((event.target.value || null) as Brief["transport_mode"])}><option value="">{railAvailable ? "Compare flights and trains" : "Flights"}</option><option value="flight">Flights</option>{railAvailable && <option value="rail">Trains</option>}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
+        <label>Travel by<span className="select-wrap"><select name="transport" value={railAvailable ? transport ?? "" : "flight"} disabled={!railAvailable} onChange={event => setTransport((event.target.value || null) as Brief["transport_mode"])}>{railAvailable && <option value="">Compare flights and trains</option>}<option value="flight">Flights</option>{railAvailable && <option value="rail">Trains</option>}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
+        {!railAvailable && <p className="fine">{selectedFixture?.city === "Lyon" ? `We don’t have a reviewed train route from ${origin} to Lyon.` : "Main journey train routes are currently available for Lyon only."} Your plan can still link to local airport transfers in Google Maps.</p>}
         <fieldset className="budget"><legend>Your travel style</legend>{([ ["budget", "£", "Keep it cheap", "Dorms and shared bathrooms can be included"], ["value", "££", "Best value", "Balance price, comfort and journey time"], ["comfort", "£££", "Comfort first", "Fewer changes and more comfortable stays"] ] as const).map(([value, price, title, help]) => <label key={value} className={budget === value ? "selected" : ""}><input type="radio" name="budget" value={value} checked={budget === value} onChange={() => setBudget(value)} /><b>{price}</b><span>{title}<small>{help}</small></span></label>)}</fieldset>
         <p className="fine">Travel style changes which options we recommend. It doesn’t guarantee the lowest price.</p>
         <div className="grid-two preference-checks"><label><input type="checkbox" name="private_room" /> Private room required</label><label><input type="checkbox" name="private_bathroom" /> Private bathroom required</label></div>
@@ -168,7 +169,7 @@ export function PlannerForm() {
         <label>Email address<input name="email" type="email" autoComplete="email" required={step === 2} placeholder="you@example.com" /></label>
         <p className="fine">We’ll use this address to send this itinerary once. No account and no marketing. <Link href="/privacy/">How we use your data</Link>.</p>
         <label>Anything else? <span className="muted">Optional</span><textarea name="instructions" maxLength={2000} rows={3} placeholder="Gatwick preferred, step-free stations, no shared rooms…" /></label>
-        <div className="form-review"><strong>Before you start</strong><p>{origin === "London" ? railAvailable ? "We’ll search flights from Heathrow, Gatwick, Stansted or Luton, plus supported St Pancras routes." : "We’ll search flights from Heathrow, Gatwick, Stansted or Luton." : railAvailable ? `We’ll search flights from ${origin} and dated trains through London and Paris. Allow time to change stations in both cities.` : `We’ll search flights from the supported airport near ${origin}.`} We check nonstop flights first, then suitable one-stop flights if needed.{fixtures.find(f => f.id === selected)?.city === "Białystok" ? " For Białystok, we’ll check a train from Warsaw and leave time for the airport transfer. Train fares may be unavailable." : ""} Routes and prices depend on what the provider can verify. Your journey to the departure point and match tickets are outside this plan.</p></div>
+        <div className="form-review"><strong>Before you start</strong><p>{origin === "London" ? railAvailable ? "We’ll search flights from Heathrow, Gatwick, Stansted or Luton, plus supported St Pancras routes." : "We’ll search flights from Heathrow, Gatwick, Stansted or Luton." : railAvailable ? `We’ll search flights from ${origin} and dated trains through London and Paris. Allow time to change stations in both cities.` : `We’ll search flights from the supported airport near ${origin}.`} We check nonstop flights first, then suitable one-stop flights if needed.{selectedFixture?.city === "Białystok" ? " For Białystok, we’ll check a train from Warsaw and leave time for the airport transfer. Train fares may be unavailable." : ""} Routes and prices depend on what the provider can verify. Your journey to the departure point and match tickets are outside this plan.</p></div>
         <div className="form-actions"><button type="button" className="text-button" onClick={() => moveTo(1)}><span className="arrow">←</span> Back</button><button className="primary" disabled={!selected || busy}>{busy ? "Starting your session…" : <>Plan my away day <span className="arrow">→</span></>}</button></div>
       </section>
     </fieldset>

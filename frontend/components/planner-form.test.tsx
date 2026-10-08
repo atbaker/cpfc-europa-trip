@@ -71,6 +71,20 @@ describe("trip brief steps", () => {
     expect(screen.getByRole("heading", { name: "How do you like to travel?" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: "Travel by" })).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Travel by" })).toHaveTextContent("Trains");
+    expect(screen.getByRole("combobox", { name: "Travel by" })).toHaveTextContent("Compare flights and trains");
+  });
+
+  it("explains when a Lyon departure city has no reviewed train route", async () => {
+    render(<PlannerForm />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Starting from" }), { target: { value: "Belfast" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue to travel preferences/ }));
+    const travelBy = screen.getByRole("combobox", { name: "Travel by" });
+    expect(travelBy).toBeDisabled();
+    expect(travelBy).toHaveValue("flight");
+    expect(screen.getByText(/don’t have a reviewed train route from Belfast to Lyon/)).toBeVisible();
+    expect(screen.getByRole("option", { name: "Flights" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Trains" })).not.toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); });
   });
 
   it("submits the selected city and rail mode in the brief", async () => {
@@ -98,12 +112,16 @@ describe("trip brief steps", () => {
     expect(lyon).not.toBeChecked();
     expect(screen.getAllByRole("radio", { name: /Olympique Lyonnais|Beşiktaş J.K.|Jagiellonia Białystok|FC Red Bull Salzburg/ })).toHaveLength(4);
     fireEvent.click(screen.getByRole("button", { name: /Continue to travel preferences/ }));
-    expect(screen.getByRole("combobox", { name: "Travel by" })).not.toHaveTextContent("Trains");
+    const travelBy = screen.getByRole("combobox", { name: "Travel by" });
+    expect(travelBy).toBeDisabled();
+    expect(travelBy).toHaveValue("flight");
+    expect(travelBy.querySelectorAll("option")).toHaveLength(1);
+    expect(screen.getByText(/Main journey train routes are currently available for Lyon only/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /Continue to your details/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Email address" }), { target: { value: "supporter@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /Plan my away day/ }));
     await waitFor(() => expect(vi.mocked(request).mock.calls.some(([path]) => path === "/api/sessions")).toBe(true));
     const submission = vi.mocked(request).mock.calls.find(([path]) => path === "/api/sessions");
-    expect(JSON.parse(String(submission?.[1]?.body)).brief.fixture_ids).toEqual(["uel-2026-besiktas-away"]);
+    expect(JSON.parse(String(submission?.[1]?.body)).brief).toMatchObject({ fixture_ids: ["uel-2026-besiktas-away"], transport_mode: "flight" });
   });
 });
