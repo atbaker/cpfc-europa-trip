@@ -24,7 +24,7 @@ are in the [deployment readiness record](planning/2026-10-06-deployment-readines
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
 requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
 serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
-`cpfc-worker` as the App Platform worker command. The protected preview now uses
+`cpfc-worker` as the App Platform worker command. The public beta uses
 `EMAIL_MODE=resend` for live itinerary emails.
 By default, `APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
 available to the platform health check. The database adapter accepts DigitalOcean's PostgreSQL

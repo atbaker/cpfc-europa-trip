@@ -87,9 +87,28 @@ The preview remains password-protected and `eaglesaway.com` DNS is unchanged.
 4. Exercise a deployed trip through API, Temporal worker, database, provider search, browser reload and email mode appropriate to the release. Test worker replacement, a failed provider request, and a rollback before DNS cutover.
 5. Update Cloudflare DNS only after the release is healthy and the domain owner approves the exact record change; verify certificate issuance and both apex and `www` behavior.
 
-## Decisions still needed
+## Decisions pending at the initial GCP review
 
 - Billing-account permission or administrator action to link an owner-approved account to `cpfc-europa-trip-prod`; its billing is currently disabled. Attempts with both `Billing Account for temporal.io` and `Navan GCP Card` were denied. The owner chose this project for a private preview and declined the sandbox.
 - Import the locally configured, health-checked Temporal Cloud API key directly into Secret Manager; the namespace and endpoint are confirmed.
 - Cloudflare DNS access and intended `www` behavior.
 - For public use: operator identity, retention/deletion contact, Resend webhook secret, commercial permission for search-result display and 24-hour cache, and shared admission/cost limits.
+
+## 9 October 2026 — public beta on DigitalOcean
+
+The owner confirmed `shy.ruparel@temporal.io` for the public privacy contact. DigitalOcean app
+`373808be-b5ec-4d20-b7fc-d8dbe906aff9` deployed commit `905ff2b` as deployment
+`17cf6e61-831f-4454-8b7e-4408de671d76` and reached `ACTIVE`. The applied spec sets
+`PREVIEW_ACCESS_REQUIRED=false`, removes the preview credentials, and schedules `cpfc-prune` hourly
+at minute zero UTC. The retention job deletes application database sessions, related email
+deliveries, and webhook records older than 30 days; its first hosted invocation is not yet verified.
+
+Anonymous `https://eaglesaway.com/`, `/privacy/`, `/api/catalog`, and `/healthz` returned 200.
+A cross-origin session POST returned 403; an invalid same-origin POST returned 422. The live root
+response has no `Permissions-Policy` header, and the in-app browser console recorded no warnings
+before or after analytics consent. The reported Firefox warnings remain unlocalized to a specific
+response or extension. Hosted Lighthouse measured mobile scores 97/100/100/100 and desktop
+100/100/100/100 (performance/accessibility/best practices/SEO). Its only sizeable asset finding
+was the 79 KB Temporal lockup; a 3.8 KB lossless WebP replacement is prepared for the next deploy.
+This beta still needs provider acceptance monitoring, privacy/vendor retention review, and traffic
+controls beyond the current per-process session limit.
