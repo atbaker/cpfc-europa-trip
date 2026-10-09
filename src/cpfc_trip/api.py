@@ -106,7 +106,11 @@ def create_app(
 
     @app.middleware("http")
     async def protect(request: Request, call_next: Any) -> Response:
-        if config.app_env == "preview" and request.url.path != "/healthz":
+        if (
+            config.app_env == "preview"
+            and config.preview_access_required
+            and request.url.path != "/healthz"
+        ):
             encoded = request.headers.get("authorization", "").removeprefix("Basic ")
             try:
                 decoded = base64.b64decode(encoded, validate=True).decode("utf-8")

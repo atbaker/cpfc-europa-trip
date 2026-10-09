@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     additional_frontend_origins: str = ""
     static_export_dir: str = ""
+    preview_access_required: bool = True
     preview_username: str = ""
     preview_password: SecretStr = SecretStr("")
     database_url: str = "postgresql+asyncpg://cpfc:cpfc@localhost:5432/cpfc"
@@ -43,8 +44,10 @@ class Settings(BaseSettings):
     def production(self) -> Self:
         if self.google_auth_mode == "api_key" and not self.gemini_api_key.get_secret_value():
             raise ValueError("Gemini API key is required for api_key authentication")
-        if self.app_env == "preview" and (
-            not self.preview_username or not self.preview_password.get_secret_value()
+        if (
+            self.app_env == "preview"
+            and self.preview_access_required
+            and (not self.preview_username or not self.preview_password.get_secret_value())
         ):
             raise ValueError("Preview requires access credentials")
         if self.app_env == "production":

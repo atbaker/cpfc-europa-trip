@@ -13,13 +13,12 @@ The domain is **eaglesaway.com**; the verified transactional sender uses **notif
 
 ## Private cloud preview
 
-The private preview runs at
+The DigitalOcean app runs at
 [eagles-away-preview-ifemt.ondigitalocean.app](https://eagles-away-preview-ifemt.ondigitalocean.app/)
 on DigitalOcean App Platform in Frankfurt: one web service, one continuously running Temporal
-worker, a migration job and PostgreSQL. HTTP Basic credentials protect the preview;
-`eaglesaway.com` is registered as the app's primary custom domain, but its Cloudflare DNS
-record and HTTPS certificate are still pending. Use the generated preview URL until the
-domain is verified. The earlier GCP review and current deployment evidence
+worker, a migration job, an hourly retention job, and PostgreSQL. The app's primary domain is
+`eaglesaway.com`. HTTP Basic remains available for a protected preview; public access is enabled
+only when `PREVIEW_ACCESS_REQUIRED=false` is set in the deployed app spec. The earlier GCP review and deployment evidence
 are in the [deployment readiness record](planning/2026-10-06-deployment-readiness.md).
 
 `Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
@@ -27,9 +26,12 @@ requests and session cookies use the same origin. The image defaults to `APP_ENV
 serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
 `cpfc-worker` as the App Platform worker command. The protected preview now uses
 `EMAIL_MODE=resend` for live itinerary emails.
-`APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
+By default, `APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
 available to the platform health check. The database adapter accepts DigitalOcean's PostgreSQL
 connection URL and uses `asyncpg` with its requested TLS mode.
+For an explicitly public beta on this preview infrastructure, set
+`PREVIEW_ACCESS_REQUIRED=false` and remove the unused preview credentials from the app spec.
+This only removes HTTP Basic; the session cookie and POST origin checks remain active.
 Build and smoke-test locally without placing `.env` files in the image:
 
 ```bash
@@ -194,6 +196,12 @@ The frozen itinerary is persisted and rendered without another research pass. Th
 freezes the sender/content/idempotency key before sending; ambiguous sends are never retried
 under a new identity after the safe retry window. Existing real delivery was validated in
 September; a fresh engineer should use previews unless an actual send has been authorized.
+After the email provider accepts a send, the app erases its local encrypted recipient address
+and address hash in the same transaction as the provider receipt. An ambiguous send retains the
+address until it can be retried or reconciled; the provider may separately retain delivery data.
+The `cpfc-prune` command deletes application database sessions and their email delivery records
+older than 30 days, plus email webhook records older than 30 days. DigitalOcean schedules it hourly
+at minute zero UTC. This does not control retention in Resend, Temporal Cloud, or database backups.
 
 ## Validate changes
 

@@ -30,6 +30,17 @@ def test_preview_requires_access_credentials() -> None:
         Settings(app_env="preview", preview_username="", preview_password="")
 
 
+def test_public_preview_does_not_require_access_credentials() -> None:
+    """Allow an explicitly public preview without HTTP Basic credentials."""
+    settings = Settings(
+        app_env="preview",
+        preview_access_required=False,
+        preview_username="",
+        preview_password="",
+    )
+    assert settings.preview_access_required is False
+
+
 def frozen(data):
     spec = enumerate_specs(data.brief, data.fixtures, data.routes, True)[0]
     trip = choose(
@@ -330,3 +341,28 @@ async def test_preview_serves_export_and_uses_secure_session_cookie(
         )
         assert response.status_code == 202
         assert "Secure" in response.headers["set-cookie"]
+
+
+async def test_public_preview_keeps_origin_guard(settings: Settings, tmp_path) -> None:
+    """Public pages and catalog need no Basic auth; cross-origin writes stay blocked."""
+    export = tmp_path / "out"
+    export.mkdir()
+    (export / "index.html").write_text("<h1>Eagles Away</h1>")
+    public_preview = settings.model_copy(
+        update={
+            "app_env": "preview",
+            "frontend_origin": "https://eaglesaway.com",
+            "static_export_dir": str(export),
+            "preview_access_required": False,
+        }
+    )
+    app = create_app(public_preview, AsyncMock(), AsyncMock())
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="https://eaglesaway.com") as client,
+    ):
+        assert (await client.get("/")).status_code == 200
+        assert (await client.get("/api/catalog")).status_code == 200
+        assert (
+            await client.post("/api/sessions", json={}, headers={"Origin": "https://evil.example"})
+        ).status_code == 403

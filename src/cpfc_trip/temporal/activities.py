@@ -53,6 +53,11 @@ class SearchActivities:
         return await self._search(spec, "stay")
 
 
+def _erase_local_recipient(session: SessionRow) -> None:
+    session.encrypted_email = b""
+    session.email_hash = ""
+
+
 class DeliveryActivities:
     def __init__(self, repository: Repository):
         self.repository = repository
@@ -86,6 +91,7 @@ class DeliveryActivities:
             elif delivery.payload_hash != payload_hash:
                 raise ApplicationError("Frozen email payload mismatch", non_retryable=True)
             elif delivery.provider_id:
+                _erase_local_recipient(row)
                 return str(delivery.provider_id)
             row.saved_itinerary = (
                 json.loads(snapshot.itinerary.model_dump_json()) if snapshot.itinerary else None
@@ -96,7 +102,10 @@ class DeliveryActivities:
                 select(DeliveryRow).where(DeliveryRow.session_id == sid).with_for_update()
             )
             assert delivery is not None
+            row = await db.get(SessionRow, sid)
+            assert row is not None
             if delivery.provider_id:
+                _erase_local_recipient(row)
                 return str(delivery.provider_id)
             created = (
                 delivery.created_at.replace(tzinfo=UTC)
@@ -105,8 +114,6 @@ class DeliveryActivities:
             )
             if datetime.now(UTC) - created >= timedelta(hours=23):
                 raise ApplicationError("Email outcome requires reconciliation", non_retryable=True)
-            row = await db.get(SessionRow, sid)
-            assert row is not None
             if row.deleted_at:
                 raise ApplicationError("Session is deleted", non_retryable=True)
             delivery.attempts += 1
@@ -129,4 +136,5 @@ class DeliveryActivities:
                     f"final-itinerary/{sid}",
                 )
             delivery.provider_id, delivery.status = provider_id, "submitted"
+            _erase_local_recipient(row)
             return provider_id
