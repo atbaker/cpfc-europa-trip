@@ -109,6 +109,9 @@ response has no `Permissions-Policy` header, and the in-app browser console reco
 before or after analytics consent. The reported Firefox warnings remain unlocalized to a specific
 response or extension. Hosted Lighthouse measured mobile scores 97/100/100/100 and desktop
 100/100/100/100 (performance/accessibility/best practices/SEO). Its only sizeable asset finding
-was the 79 KB Temporal lockup; a 3.8 KB lossless WebP replacement is prepared for the next deploy.
+was the 79 KB Temporal lockup. A 3.8 KB lossless WebP replacement deployed in
+`7bfa34c2-5856-4e1e-b3f6-f560958be9bb` and reached `ACTIVE`; the live page references it,
+and its 200 response transfers 3,848 bytes. The final hosted Lighthouse scores were mobile
+99/100/100/100 and desktop 100/100/100/100, with no image-delivery finding and mobile LCP 2.0 s.
 This beta still needs provider acceptance monitoring, privacy/vendor retention review, and traffic
 controls beyond the current per-process session limit.
