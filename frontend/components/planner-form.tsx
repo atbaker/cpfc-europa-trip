@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Brief, Fixture, londonDayBoundary, request } from "../lib/api";
 import formCatalog from "../lib/form-catalog.json";
+import { trackAnalytics } from "../lib/analytics";
 
 const stepNames = ["Match & dates", "Travel preferences", "Your details"] as const;
 const bundledFixtures = formCatalog.fixtures as Fixture[];
@@ -61,6 +62,8 @@ export function PlannerForm() {
   }, [step, hasNavigated]);
 
   function moveTo(next: number) {
+    if (step === 0 && next === 1) trackAnalytics("form_match_complete");
+    if (step === 1 && next === 2) trackAnalytics("form_preferences_complete");
     setHasNavigated(true);
     setError("");
     setStep(next);
@@ -122,6 +125,7 @@ export function PlannerForm() {
         body: JSON.stringify({ submission_id: attempt.current.id, ...JSON.parse(content) }),
       });
       if (result) {
+        trackAnalytics("trip_started");
         try { if (selectedFixture) sessionStorage.setItem(`cpfc-city-${result.public_session_id}`, selectedFixture.city); } catch { /* ignore */ }
         router.push(`/plan/?session=${result.public_session_id}`);
       }

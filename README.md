@@ -213,7 +213,11 @@ own servers; they do not need the main local server or API/worker.
 
 The frontend exports `/`, `/plan/` and `/privacy/`. Production requires
 `NEXT_PUBLIC_API_ORIGIN=` at build time for same-origin API calls; local `.env.local` points
-to port 8000. No production Node server is part of the plan.
+to port 8000. `NEXT_PUBLIC_GA_MEASUREMENT_ID` optionally enables consent-gated Google
+Analytics; the measurement ID is public and must be supplied as a Docker build argument for
+the DigitalOcean preview. Google Analytics enhanced measurement should remain disabled so
+automatic page views cannot include the `/plan/` session query. No production Node server is
+part of the plan.
 
 For a deliberate paid integration run:
 

@@ -4,6 +4,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 ENV NEXT_PUBLIC_API_ORIGIN=""
+ARG NEXT_PUBLIC_GA_MEASUREMENT_ID
 RUN npm run build
 
 FROM python:3.13-slim-bookworm AS python-dependencies

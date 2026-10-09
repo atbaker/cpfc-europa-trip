@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ApiError, Snapshot, newer, request, terminal } from "../lib/api";
 import { ItineraryView, JourneyPreview } from "./itinerary-view";
 import { PlanningProgress } from "./planning-progress";
+import { trackAnalytics } from "../lib/analytics";
 
 export function PlanExperience() {
   const params = useSearchParams();
@@ -23,6 +24,7 @@ export function PlanExperience() {
   const heroShown = useRef(false);
   const hadItinerary = useRef(false);
   const hasItinerary = !!snapshot?.itinerary;
+  const outcomeTracked = useRef(false);
   const refresh = useRef<() => void>(() => {});
   useEffect(() => {
     if (!session) return;
@@ -69,9 +71,14 @@ export function PlanExperience() {
     }
     hadItinerary.current = hasItinerary;
   }, [hasItinerary]);
+  useEffect(() => {
+    if (outcomeTracked.current || !snapshot) return;
+    if (snapshot.itinerary) { trackAnalytics("plan_ready"); outcomeTracked.current = true; }
+    else if (snapshot.phase === "failed") { trackAnalytics("plan_failed"); outcomeTracked.current = true; }
+  }, [snapshot]);
   async function finalize() {
     setFinalizing(true); finalizeId.current ??= crypto.randomUUID();
-    try { await request(`/api/sessions/${session}/finalize`, { method: "POST", body: JSON.stringify({ id: finalizeId.current }) }); refresh.current(); }
+    try { await request(`/api/sessions/${session}/finalize`, { method: "POST", body: JSON.stringify({ id: finalizeId.current }) }); trackAnalytics("plan_sent"); refresh.current(); }
     catch (e) { setFinalizing(false); setError(e instanceof Error ? e.message : "Please retry."); }
   }
   if (!session) return <div className="plan panel"><h1>No session selected</h1><Link href="/">Start a trip brief <span className="arrow">→</span></Link></div>;

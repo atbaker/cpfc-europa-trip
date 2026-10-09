@@ -42,6 +42,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sponsor-logo { display: block; width: 105px; height: auto; }
 main { min-height: 75vh; }
 footer { display: flex; justify-content: space-between; gap: 18px; padding: 28px max(var(--page-gutter), calc((100vw - var(--content))/2)); border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.analytics-settings { min-height: 0; padding: 0; font-size: inherit; white-space: nowrap; }
+.analytics-consent { position: fixed; z-index: 10; right: var(--page-gutter); bottom: var(--page-gutter); width: min(440px, calc(100vw - 2 * var(--page-gutter))); max-height: calc(100vh - 2 * var(--page-gutter)); overflow: auto; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: 0 10px 40px #17253d26; color: var(--ink); font-size: 14px; }
+.analytics-consent p { margin-bottom: var(--space-2); }
+.analytics-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-1); }
+.analytics-actions button { flex: 1; border: 1px solid var(--blue); }
 
 h1, h2, h3, h4, p { margin-top: 0; }
 h1, h2, h3 { line-height: 1.15; }
