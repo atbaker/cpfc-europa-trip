@@ -39,3 +39,11 @@ class WebhookRow(Base):
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     event_type: Mapped[str] = mapped_column(String(64))
+
+
+class SearchCacheRow(Base):
+    __tablename__ = "search_cache"
+    namespace: Mapped[str] = mapped_column(String(16), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

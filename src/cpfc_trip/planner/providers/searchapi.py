@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -24,14 +24,20 @@ from cpfc_trip.domain import (
     SearchSpec,
     Stay,
 )
+from cpfc_trip.origins import UK_RAIL
 from cpfc_trip.planner.links import flight_url, hotel_url, safe_url
 from cpfc_trip.planner.prices import money
 
 ENDPOINT = "https://www.searchapi.io/api/v1/search"
+REQUEST_CAPS = {"flight": 8, "rail": 8, "stay": 8}
 
 
 class ProviderError(Exception):
     """A sanitized, user-safe provider failure (never includes credentials or raw URLs)."""
+
+
+class NoResultsError(ProviderError):
+    """The provider explicitly found no results for this search."""
 
 
 def fingerprint(params: object) -> str:
@@ -39,9 +45,10 @@ def fingerprint(params: object) -> str:
 
 
 class SearchApi:
-    def __init__(self, client: httpx.AsyncClient, settings: Settings, limit: int = 5):
+    def __init__(self, client: httpx.AsyncClient, settings: Settings, limit: int = 8):
         self.client, self.settings, self.limit = client, settings, limit
         self.calls = 0
+        self.deadline = asyncio.get_running_loop().time() + 80
 
     async def get(self, params: dict[str, Any]) -> dict[str, Any]:
         if (
@@ -49,35 +56,50 @@ class SearchApi:
             or not self.settings.searchapi_api_key.get_secret_value()
         ):
             raise ProviderError("Travel search is currently unavailable")
-        if self.calls >= self.limit:
-            raise ProviderError("Search request limit reached")
-        self.calls += 1
-        # Adapter Activities make one attempt; HTTP SDK retries are off.
-        try:
-            response = await self.client.get(
-                ENDPOINT,
-                params=params,
-                headers={
-                    "Authorization": f"Bearer {self.settings.searchapi_api_key.get_secret_value()}"
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            if len(response.content) > 4_000_000:
-                raise ProviderError("Travel search response exceeded its size limit")
-            data = response.json()
-            if not isinstance(data, dict) or data.get("error") or data.get("errors"):
-                raise ProviderError("Travel search returned an error")
-            return data
-        except (httpx.HTTPError, ValueError) as exc:
-            # Engine/status only: never log request URLs, headers, provider bodies or secrets.
-            logging.getLogger("cpfc_trip.provider").warning(
-                "SearchApi request failed: engine=%s error=%s status=%s",
-                params.get("engine"),
-                type(exc).__name__,
-                exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None,
-            )
-            raise ProviderError("Travel search did not return usable results") from None
+        for attempt in range(2):
+            remaining = self.deadline - asyncio.get_running_loop().time()
+            if self.calls >= self.limit or remaining <= 0:
+                raise ProviderError("Search request limit or deadline reached")
+            self.calls += 1
+            try:
+                response = await self.client.get(
+                    ENDPOINT,
+                    params=params,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.searchapi_api_key.get_secret_value()}"
+                    },
+                    timeout=min(20, remaining),
+                )
+                response.raise_for_status()
+                if len(response.content) > 4_000_000:
+                    raise ProviderError("Travel search response exceeded its size limit")
+                data = response.json()
+                if (
+                    isinstance(data, dict)
+                    and data.get("error") == "Google Flights didn't return any results."
+                ):
+                    raise NoResultsError("No flights found")
+                if not isinstance(data, dict) or data.get("error") or data.get("errors"):
+                    raise ProviderError("Travel search returned an error")
+                return data
+            except (httpx.HTTPError, ValueError) as exc:
+                # Engine/status only: never log request URLs, headers, bodies or secrets.
+                logging.getLogger("cpfc_trip.provider").warning(
+                    "SearchApi request failed: engine=%s error=%s status=%s",
+                    params.get("engine"),
+                    type(exc).__name__,
+                    exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None,
+                )
+                retryable = isinstance(exc, httpx.TransportError) or (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and (exc.response.status_code == 429 or exc.response.status_code >= 500)
+                )
+                if not retryable or attempt or self.calls >= self.limit:
+                    raise ProviderError("Travel search did not return usable results") from None
+                await asyncio.sleep(
+                    min(0.25, max(0, self.deadline - asyncio.get_running_loop().time()))
+                )
+        raise ProviderError("Travel search did not return usable results")
 
 
 def evidence(data: dict[str, Any], source: str, checked: datetime) -> Evidence:
@@ -150,24 +172,59 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
     legs: list[tuple[Leg, ...]] = []
     for index, direction in enumerate(selected):
         flights = direction.get("flights", [])
-        # Intermediate airport timezones need an airport catalog. Until reviewed, refuse connections.
-        if len(flights) != 1:
-            return SearchBatch(
-                gaps=("Connecting-flight airport timezones require further evidence.",)
-            )
-        flight = flights[0]
-        dep, arr = flight["departure_airport"], flight["arrival_airport"]
-        london = spec.route.origin.split(",")
+        if not 1 <= len(flights) <= 2:
+            return SearchBatch(gaps=("Only nonstop and one-stop flights are supported.",))
+        dep, arr = flights[0]["departure_airport"], flights[-1]["arrival_airport"]
+        origin_airports = spec.route.origin.split(",")
         if index == 0:
-            valid = dep["id"] in london and arr["id"] == spec.route.destination
+            valid = dep["id"] in origin_airports and arr["id"] == spec.route.destination
             dep_tz, arr_tz = "Europe/London", spec.route.destination_timezone
         else:
-            valid = dep["id"] == spec.route.destination and arr["id"] in london
+            valid = dep["id"] == spec.route.destination and arr["id"] in origin_airports
             dep_tz, arr_tz = spec.route.destination_timezone, "Europe/London"
         if not valid or dep.get("date") != str(
             spec.outbound_date if index == 0 else spec.return_date
         ):
             return SearchBatch(gaps=("Returned airports did not match the catalog route.",))
+        caveats = ["Select and confirm this itinerary on Google Flights."]
+        if len(flights) == 2:
+            connection_arrival = flights[0]["arrival_airport"]
+            connection_departure = flights[1]["departure_airport"]
+            connection = connection_arrival.get("id")
+            durations = [flight.get("duration") for flight in flights]
+            if (
+                not connection
+                or connection != connection_departure.get("id")
+                or any(not isinstance(duration, int) or duration <= 0 for duration in durations)
+            ):
+                return SearchBatch(gaps=("The flight connection could not be verified.",))
+            arrival_local = datetime.fromisoformat(
+                f"{connection_arrival['date']}T{connection_arrival['time']}"
+            )
+            departure_local = datetime.fromisoformat(
+                f"{connection_departure['date']}T{connection_departure['time']}"
+            )
+            first_arrival = local_time(dep, dep_tz).astimezone(UTC) + timedelta(
+                minutes=durations[0]
+            )
+            second_departure = local_time(arr, arr_tz).astimezone(UTC) - timedelta(
+                minutes=durations[1]
+            )
+            layover_minutes = round((second_departure - first_arrival).total_seconds() / 60)
+            reported = direction.get("layovers") or []
+            if (
+                departure_local <= arrival_local
+                or not 60 <= layover_minutes <= 480
+                or len(reported) != 1
+                or reported[0].get("id") != connection
+                or not isinstance(reported[0].get("duration"), int)
+                or abs(reported[0]["duration"] - layover_minutes) > 10
+            ):
+                return SearchBatch(gaps=("The flight connection could not be verified.",))
+            caveats.insert(
+                0,
+                f"One stop via {connection} ({layover_minutes} minutes). Confirm the connection, baggage and terminal details before booking.",
+            )
         legs.append(
             (
                 Leg(
@@ -177,11 +234,13 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
                     destination=arr["id"],
                     departs_at=local_time(dep, dep_tz),
                     arrives_at=local_time(arr, arr_tz),
-                    operator=flight["airline"],
-                    service_number=flight.get("flight_number", ""),
+                    operator=" / ".join(dict.fromkeys(flight["airline"] for flight in flights)),
+                    service_number=" / ".join(
+                        flight.get("flight_number", "") for flight in flights
+                    ),
                     offer=ref,
                     quote=quote,
-                    caveats=("Select and confirm this itinerary on Google Flights.",),
+                    caveats=tuple(caveats),
                 ),
             )
         )
@@ -190,9 +249,7 @@ def normalize_flights(data: dict[str, Any], spec: SearchSpec, checked: datetime)
     )
 
 
-async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
-    if any(a < 2 for a in spec.party.child_ages):
-        return SearchBatch(gaps=("Infant flight pricing is not yet supported.",))
+async def _search_flights_for_stops(api: SearchApi, spec: SearchSpec, stops: str) -> SearchBatch:
     p = dict(
         engine="google_flights",
         departure_id=spec.route.origin,
@@ -200,37 +257,123 @@ async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         outbound_date=str(spec.outbound_date),
         return_date=str(spec.return_date),
         flight_type="round_trip",
-        stops="nonstop",
+        stops=stops,
         adults=spec.party.adults,
         children=len(spec.party.child_ages),
         currency="GBP",
         gl="GB",
         hl="en",
     )
-    initial = await api.get(p)
-    choices = initial.get("best_flights", []) + initial.get("other_flights", [])
+    try:
+        initial = await api.get(p)
+    except NoResultsError:
+        return SearchBatch(
+            calls=api.calls,
+            gaps=(
+                f"No {stops.replace('_', ' ')} flights were found for this route and date pair.",
+            ),
+        )
+    onward = spec.route.onward_stations == ("Warsaw", "Białystok")
+    choices = [
+        item
+        for item in initial.get("best_flights", []) + initial.get("other_flights", [])
+        if item.get("departure_token")
+    ]
+    if onward:
+        # The provider's cheapest first choice can arrive after the last useful train.
+        choices.sort(
+            key=lambda x: (
+                (x.get("flights") or [{}])[-1].get("arrival_airport", {}).get("date", "9999"),
+                (x.get("flights") or [{}])[-1].get("arrival_airport", {}).get("time", "99:99"),
+            )
+        )
     journeys: list[Journey] = []
-    for item in choices[:2]:
-        if not item.get("departure_token"):
-            continue
+    for item in choices[:1]:
         try:
             returns = await api.get({**p, "departure_token": item["departure_token"]})
             back = returns.get("best_flights", []) + returns.get("other_flights", [])
             if not back:
                 back = returns.get("flights", [])
+            if onward:
+                back.sort(
+                    key=lambda x: (
+                        (x.get("flights") or [{}])[0].get("departure_airport", {}).get("date", ""),
+                        (x.get("flights") or [{}])[0].get("departure_airport", {}).get("time", ""),
+                    ),
+                    reverse=True,
+                )
             token = next((x.get("booking_token") for x in back if x.get("booking_token")), None)
             if not token:
                 continue
             selected = await api.get({**p, "booking_token": token})
             result = normalize_flights(selected, spec, datetime.now(UTC))
-            journeys.extend(result.journeys)
+            if onward and result.journeys:
+                outward, inbound = await asyncio.gather(
+                    api.get(
+                        {
+                            "engine": "google",
+                            "q": f"trains from Warsaw to Białystok on {spec.outbound_date:%d %B %Y}",
+                            "gl": "uk",
+                            "hl": "en",
+                        }
+                    ),
+                    api.get(
+                        {
+                            "engine": "google",
+                            "q": f"trains from Białystok to Warsaw on {spec.return_date:%d %B %Y}",
+                            "gl": "uk",
+                            "hl": "en",
+                        }
+                    ),
+                )
+                checked = datetime.now(UTC)
+                out_legs = normalize_trains(
+                    outward, "Warsaw", "Białystok", str(spec.outbound_date), checked
+                )
+                in_legs = normalize_trains(
+                    inbound, "Białystok", "Warsaw", str(spec.return_date), checked
+                )
+                for flight in result.journeys:
+                    journeys.extend(
+                        connect_onward_rail(
+                            flight, out_legs, in_legs, spec.route.minimum_transfer_minutes
+                        )
+                    )
+            else:
+                journeys.extend(result.journeys)
         except (ProviderError, KeyError, ValueError):
             # Preserve earlier complete flight offers when another choice fails.
             continue
     return SearchBatch(
         journeys=tuple(journeys),
         calls=api.calls,
-        gaps=() if journeys else ("No complete flight result was verified.",),
+        gaps=()
+        if journeys
+        else (
+            ("No complete flight and Warsaw–Białystok train connection was verified.",)
+            if onward
+            else ("No complete flight result was verified.",)
+        ),
+    )
+
+
+async def search_flights(api: SearchApi, spec: SearchSpec) -> SearchBatch:
+    if any(a < 2 for a in spec.party.child_ages):
+        return SearchBatch(gaps=("Infant flight pricing is not yet supported.",))
+    direct = await _search_flights_for_stops(api, spec, "nonstop")
+    if direct.journeys:
+        return direct
+    if api.calls >= api.limit or asyncio.get_running_loop().time() >= api.deadline:
+        return SearchBatch(
+            calls=api.calls,
+            gaps=("No complete flight was verified within the search limits.",),
+        )
+    connected = await _search_flights_for_stops(api, spec, "one_stop_or_fewer")
+    if connected.journeys:
+        return connected
+    return SearchBatch(
+        calls=api.calls,
+        gaps=("No nonstop or suitable one-stop flights were found for this route and date pair.",),
     )
 
 
@@ -307,7 +450,7 @@ def normalize_stay(
         if "shared bathroom" in name.lower() or "shared bathroom" in room_facts
         else "unknown"
     )
-    if spec.private_room and is_dorm or spec.private_bathroom and bathroom != "private":
+    if (spec.private_room and is_dorm) or (spec.private_bathroom and bathroom != "private"):
         return None
     return Stay(
         id=ref.id,
@@ -384,7 +527,7 @@ async def search_stays(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         )
 
     properties.sort(key=property_rank)
-    for prop in properties[:3]:
+    for prop in properties[:2]:
         url = hotel_url(
             prop.get("link", ""), str(spec.outbound_date), str(spec.return_date), spec.party
         )
@@ -433,7 +576,14 @@ def normalize_trains(
             ("Paris", "London"): ("Gare du Nord", "St Pancras International"),
             ("Paris", "Lyon"): ("Gare de Lyon", "Lyon Part Dieu"),
             ("Lyon", "Paris"): ("Lyon Part Dieu", "Gare de Lyon"),
+            ("Warsaw", "Białystok"): ("Warsaw Central", "Zielone Wzgórza"),
+            ("Białystok", "Warsaw"): ("Zielone Wzgórza", "Warsaw Central"),
         }.get((origin, destination))
+        for provider_city, departure_station, london_station in UK_RAIL.values():
+            if (origin, destination) == (provider_city, "London"):
+                stations = (departure_station, london_station)
+            elif (origin, destination) == ("London", provider_city):
+                stations = (london_station, departure_station)
         if (
             not stations
             or (
@@ -445,7 +595,12 @@ def normalize_trains(
             continue
         offers = train.get("buy_ticket", {}).get("offers", [])
         selected = next((x for x in offers if safe_url(x.get("link", ""))), None)
-        if not selected:
+        operator_url = instruction.get("service_provider", {}).get("website", "")
+        unpriced_warsaw = stations in {
+            ("Warsaw Central", "Zielone Wzgórza"),
+            ("Zielone Wzgórza", "Warsaw Central"),
+        } and safe_url(operator_url)
+        if not selected and not unpriced_warsaw:
             continue
         try:
             dep = datetime.fromisoformat(window["depart_at_iso"])
@@ -462,10 +617,16 @@ def normalize_trains(
                 "Google train results",
                 (origin, destination, day, str(dep)),
                 checked,
-                safe_url(selected["link"]),
-                selected.get("source"),
+                safe_url(selected["link"]) if selected else safe_url(operator_url),
+                selected.get("source")
+                if selected
+                else instruction.get("service_provider", {}).get("name"),
             )
-            amount = money(selected.get("extracted_price"), selected.get("currency", ""))
+            amount = (
+                money(selected.get("extracted_price"), selected.get("currency", ""))
+                if selected
+                else None
+            )
             quote = (
                 Quote(
                     id=ref.id,
@@ -494,13 +655,59 @@ def normalize_trains(
                     offer=ref,
                     quote=quote,
                     caveats=(
-                        "Direct service with station and time evidence. Confirm the selected fare and passengers.",
+                        "Direct service with station and time evidence. Confirm the selected fare and passengers."
+                        if selected
+                        else "Dated train time found; fare unavailable. Choose and confirm this train with the operator.",
                     ),
                 )
             )
         except (KeyError, ValueError, ValidationError):
             continue
     return tuple(legs)
+
+
+def connect_onward_rail(
+    flight: Journey, outward: tuple[Leg, ...], inbound: tuple[Leg, ...], minutes: int
+) -> tuple[Journey, ...]:
+    """Join a WAW flight to reviewed direct trains, leaving time to change stations."""
+    if flight.outbound[-1].destination != "WAW" or flight.inbound[0].origin != "WAW":
+        return ()
+    journeys = []
+    minimum = timedelta(minutes=minutes)
+    maximum = timedelta(hours=8)
+    for out in outward:
+        if (out.origin, out.destination) != ("Warsaw Central", "Zielone Wzgórza"):
+            continue
+        out_wait = out.departs_at - flight.outbound[-1].arrives_at
+        if not (
+            minimum <= out_wait <= maximum
+            and out.departs_at.date() == flight.outbound[-1].arrives_at.date()
+        ):
+            continue
+        for back in inbound:
+            if (back.origin, back.destination) != ("Zielone Wzgórza", "Warsaw Central"):
+                continue
+            back_wait = flight.inbound[0].departs_at - back.arrives_at
+            if not (
+                minimum <= back_wait <= maximum
+                and back.arrives_at.date() == flight.inbound[0].departs_at.date()
+            ):
+                continue
+            journeys.append(
+                Journey(
+                    id=fingerprint((flight.id, out.id, back.id)),
+                    route_id=flight.route_id,
+                    outbound=(*flight.outbound, out),
+                    inbound=(back, *flight.inbound),
+                )
+            )
+    journeys.sort(
+        key=lambda j: (
+            j.outbound[-1].arrives_at - j.outbound[0].departs_at,
+            j.inbound[-1].arrives_at - j.inbound[0].departs_at,
+        )
+    )
+    return tuple(journeys[:8])
 
 
 def connect_rail(
@@ -521,27 +728,74 @@ def connect_rail(
     return pairs[:8]
 
 
+def london_connection(first: Leg, second: Leg, minutes: int) -> bool:
+    """Require a same-day, buffered transfer between a UK terminal and Eurostar."""
+    terminals = {station for _, _, station in UK_RAIL.values()}
+    return (
+        (
+            (first.destination in terminals and second.origin == "St Pancras International")
+            or (first.destination == "St Pancras International" and second.origin in terminals)
+        )
+        and first.arrives_at.date() == second.departs_at.date()
+        and timedelta(minutes=minutes) <= second.departs_at - first.arrives_at <= timedelta(hours=8)
+    )
+
+
 async def search_trains(api: SearchApi, spec: SearchSpec) -> SearchBatch:
-    if spec.route.id != "london-paris-lyon":
+    if spec.route.id != "london-paris-lyon" and spec.route.origin not in UK_RAIL:
         return SearchBatch(gaps=("This rail pattern has not passed station-transfer review.",))
-    legs = []
-    for origin, destination, day in [
+    segments = [
         ("London", "Paris", spec.outbound_date),
         ("Paris", "Lyon", spec.outbound_date),
         ("Lyon", "Paris", spec.return_date),
         ("Paris", "London", spec.return_date),
-    ]:
-        data = await api.get(
-            dict(
-                engine="google",
-                q=f"trains from {origin} to {destination} on {day:%d %B %Y}",
-                gl="uk",
-                hl="en",
+    ]
+    if spec.route.origin in UK_RAIL:
+        provider_city = UK_RAIL[spec.route.origin][0]
+        segments = [
+            (provider_city, "London", spec.outbound_date),
+            *segments,
+            ("London", provider_city, spec.return_date),
+        ]
+    semaphore = asyncio.Semaphore(3)
+
+    async def fetch(origin: str, destination: str, day: datetime | date) -> tuple[Leg, ...]:
+        async with semaphore:
+            data = await api.get(
+                dict(
+                    engine="google",
+                    q=f"trains from {origin} to {destination} on {day:%d %B %Y}",
+                    gl="uk",
+                    hl="en",
+                )
             )
-        )
-        legs.append(normalize_trains(data, origin, destination, str(day), datetime.now(UTC)))
-    outbound = connect_rail(legs[0], legs[1], spec.route.minimum_transfer_minutes)
-    inbound = connect_rail(legs[2], legs[3], spec.route.minimum_transfer_minutes)
+        return normalize_trains(data, origin, destination, str(day), datetime.now(UTC))
+
+    legs = await asyncio.gather(*(fetch(*segment) for segment in segments))
+    if len(legs) == 4:
+        outbound: list[tuple[Leg, ...]] = [
+            tuple(pair)
+            for pair in connect_rail(legs[0], legs[1], spec.route.minimum_transfer_minutes)
+        ]
+        inbound: list[tuple[Leg, ...]] = [
+            tuple(pair)
+            for pair in connect_rail(legs[2], legs[3], spec.route.minimum_transfer_minutes)
+        ]
+    else:
+        paris_out = connect_rail(legs[1], legs[2], spec.route.minimum_transfer_minutes)
+        paris_in = connect_rail(legs[3], legs[4], spec.route.minimum_transfer_minutes)
+        outbound = list[tuple[Leg, ...]](
+            (domestic, *pair)
+            for domestic in legs[0]
+            for pair in paris_out
+            if london_connection(domestic, pair[0], spec.route.minimum_transfer_minutes)
+        )[:8]
+        inbound = list[tuple[Leg, ...]](
+            (*pair, domestic)
+            for pair in paris_in
+            for domestic in legs[5]
+            if london_connection(pair[-1], domestic, spec.route.minimum_transfer_minutes)
+        )[:8]
     combinations = [(a, b) for a in outbound for b in inbound]
     combinations.sort(
         key=lambda pair: sum((x[-1].arrives_at - x[0].departs_at).total_seconds() for x in pair)
@@ -560,7 +814,7 @@ async def search_trains(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         calls=api.calls,
         gaps=()
         if journeys
-        else ("No dated rail connection meets the reviewed cross-Paris buffer.",),
+        else ("No dated rail connection meets the reviewed London and Paris transfer buffers.",),
     )
 
 
@@ -568,9 +822,9 @@ async def acquire(spec: SearchSpec, mode: str) -> SearchBatch:
     if not spec.route.enabled:
         return SearchBatch(gaps=("This catalog pattern has not passed its evidence review.",))
     async with httpx.AsyncClient(follow_redirects=False) as client:
-        api = SearchApi(client, Settings())
+        api = SearchApi(client, Settings(), limit=REQUEST_CAPS[mode])
         try:
-            async with asyncio.timeout(100):
+            async with asyncio.timeout(80):
                 if mode == "stay":
                     return await search_stays(api, spec)
                 if mode == "flight":

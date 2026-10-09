@@ -1,22 +1,44 @@
-import { Itinerary, Leg, Stay, formatMoney } from "../lib/api";
+import { type ReactNode } from "react";
+import { Fixture, Itinerary, Leg, Stay, Trip, formatMoney } from "../lib/api";
 function when(value: string): string { return new Date(value).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " UTC"; }
-function local(value: string): string { return value.slice(0, 16).replace("T", " ") + " (local)"; }
+function local(value: string): string { return new Date(`${value.slice(0, 16)}:00Z`).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " local time"; }
 function Price({ item }: { item: Leg | Stay }) {
   const q = item.quote;
-  return <div className="price">{q ? <><strong>{formatMoney(q.amount)}</strong><span> · {q.scope.replaceAll("_", " ")} / {q.unit}</span><small>Checked {when(q.observed_at)} · Taxes {q.taxes}{q.additional_taxes ? ` · Additional ${formatMoney(q.additional_taxes)}` : ""}</small>{q.caveats?.map(c => <small key={c}>{c}</small>)}</> : <span>Price unavailable — check current fare</span>}
-  <small>Source: {item.offer.evidence.underlying_source} via {item.offer.evidence.provider}</small>
-  {item.offer.booking_url && <a className="outbound" href={item.offer.booking_url} target="_blank" rel="noopener noreferrer">{item.kind === "transport" && item.mode === "flight" ? "View on Google Flights" : "View on travel provider"} ↗</a>}
+  const scope = q?.scope === "round_trip" ? "return journey" : q?.scope === "stay" ? "stay" : "journey leg";
+  const taxes = q?.taxes === "included" ? "Taxes included" : q?.taxes === "excluded" ? "Taxes not included" : "Taxes not confirmed";
+  return <div className="price">{q ? <><strong>{formatMoney(q.amount)}</strong><span> · {scope} for your {q.unit === "party" ? "group" : q.unit}</span><small>Checked {when(q.observed_at)} · {taxes}{q.additional_taxes ? ` · ${formatMoney(q.additional_taxes)} additional tax indicated` : ""}</small>{q.caveats?.map(c => <small key={c}>{c}</small>)}</> : <span>Price unavailable — check current fare</span>}
+  <small>Price source: {item.offer.evidence.underlying_source} via {item.offer.evidence.provider}</small>
+  {item.offer.booking_url && <a className="outbound" href={item.offer.booking_url} target="_blank" rel="noopener noreferrer">{item.kind === "transport" && item.mode === "flight" ? "View on Google Flights" : "View on travel provider"} <span className="arrow">↗</span></a>}
   {item.offer.link_kind === "contextual_search" && item.offer.booking_url && <small>You may need to select this option again. Prices can change.</small>}</div>;
+}
+function MatchCard({ fixture }: { fixture: Fixture }) {
+  return <section className="match-card"><span className="eyebrow">MATCHDAY</span><h3>{fixture.opponent} v Crystal Palace</h3><p>{new Date(fixture.kickoff_at).toLocaleString("en-GB", { timeZone: fixture.timezone, dateStyle: "full", timeStyle: "short" })} local</p><p className="fine">{fixture.venue} · {fixture.venue_status} venue · Match ticket not included</p></section>;
+}
+export function JourneyPreview({ trip, children }: { trip: Trip; children: ReactNode }) {
+  const journey = trip.journey;
+  if (!journey) return null;
+  return <article className="trip panel journey-preview" aria-label="Journey found while planning continues">
+    <div className="section-heading"><p className="eyebrow">{trip.fixture.city.toUpperCase()}</p><span className="tag">Plan in progress</span></div>
+    <h2>Palace at {trip.fixture.opponent}</h2>
+    <p>We found a dated return journey. This is not a complete trip yet.</p>
+    <div className="timeline">
+      <MatchCard fixture={trip.fixture} />
+      <section className="travel-card pending-card" aria-label="Still checking your trip"><span className="card-label">STILL CHECKING</span><h3>Finding your stay and comparing options</h3>{children}</section>
+      {journey.outbound.map(leg => <Transport key={leg.id} leg={leg} />)}
+      {journey.inbound.map(leg => <Transport key={leg.id} leg={leg} />)}
+    </div>
+  </article>;
 }
 export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
   return <div>{itinerary.trips.map(trip => <article key={trip.fixture.id} className="trip panel"><div className="section-heading"><p className="eyebrow">{trip.fixture.city.toUpperCase()}</p><span className="tag">{trip.feasibility === "verified" ? "Ready to review" : "Checks outstanding"}</span></div><h2>Palace at {trip.fixture.opponent}</h2><p>{trip.summary}</p>
     <div className="timeline">{trip.journey?.outbound.map(leg => <Transport key={leg.id} leg={leg} />)}
     {trip.stay && <section className="travel-card"><span className="card-label">STAY · {trip.stay.check_in} — {trip.stay.check_out}</span><h3>{trip.stay.property_name}</h3><p>{trip.stay.room_description}</p><p className="fine">{trip.stay.bathroom} bathroom · {trip.stay.review_score ? `${trip.stay.review_score}/10 review score` : "Review score unavailable"}</p><Price item={trip.stay} />{trip.stay.caveats?.map(c => <p className="fine" key={c}>{c}</p>)}</section>}
-    <section className="match-card"><span className="eyebrow">MATCHDAY</span><h3>{trip.fixture.opponent} v Crystal Palace</h3><p>{new Date(trip.fixture.kickoff_at).toLocaleString("en-GB", { timeZone: trip.fixture.timezone, dateStyle: "full", timeStyle: "short" })} local</p><p className="fine">{trip.fixture.venue} · {trip.fixture.venue_status} venue · Match ticket not included</p></section>
+    <MatchCard fixture={trip.fixture} />
     {trip.journey?.inbound.map(leg => <Transport key={leg.id} leg={leg} />)}</div>
-    {!!trip.transfers?.length && <section aria-label="Transfers"><h3>Getting between the stops</h3>{trip.transfers.map(t => <div key={t.title} className="travel-card"><h4>{t.title}</h4><p>{t.description}</p><a href={t.source_url} target="_blank" rel="noopener noreferrer">Official travel guidance ↗</a><p className="fine">Reviewed {when(t.reviewed_at)} · Transfer fares excluded</p></div>)}</section>}
-    <div className="summary"><strong>{trip.known_total ? `${formatMoney(trip.known_total)} known subtotal` : "Total price unavailable"}</strong><p className="fine">{Math.round(trip.price_coverage * 100)}% price coverage. Check missing costs before comparing trips.</p></div>
-    {!!trip.alternatives?.length && <details className="travel-card"><summary>Other options we found</summary>{trip.alternatives.map(a => <section key={a.journey.id + a.stay.id}><h4>{a.summary}</h4><p>{local(a.journey.outbound[0].departs_at)} — {local(a.journey.inbound[a.journey.inbound.length-1].arrives_at)}</p><p>{a.known_total ? `${formatMoney(a.known_total)} known subtotal` : "Total unavailable"} · Missing costs prevent a full-price comparison</p><p className="fine">Ask to change your transport mode, budget or room preferences to revise the plan.</p></section>)}</details>}
+    {!!trip.transfers?.length && <section className="trip-section" aria-label="Transfers"><h3>Getting between the stops</h3>{trip.transfers.map(t => <div key={t.title} className="travel-card"><h4>{t.title}</h4><p>{t.description}</p><a href={t.source_url} target="_blank" rel="noopener noreferrer">Official travel guidance <span className="arrow">↗</span></a><p className="fine">Reviewed {when(t.reviewed_at)} · Transfer fares excluded</p></div>)}</section>}
+    {!!trip.maps_transfers?.length && <section className="trip-section" aria-label="Local transfer directions"><h3>Plan your local transfers</h3>{trip.maps_transfers.map(t => <div key={t.title} className="travel-card"><h4>{t.title}</h4><p>{t.description}</p><a href={t.url} target="_blank" rel="noopener noreferrer">Open in Google Maps <span className="arrow">↗</span></a></div>)}<p className="fine">Google Maps opens with fresh directions. Check travel-day times, changes and fares there.</p></section>}
+    <div className="summary"><strong>{trip.known_total ? `${formatMoney(trip.known_total)} in prices found so far` : "Total price unavailable"}</strong><p className="fine">Prices are available for {Math.round(trip.price_coverage * 100)}% of the planned cost items. Check what’s missing before comparing trips.</p></div>
+    {!!trip.alternatives?.length && <details className="travel-card"><summary>Other options we found</summary>{trip.alternatives.map(a => <section key={a.journey.id + a.stay.id}><h4>{a.summary}</h4><p>{local(a.journey.outbound[0].departs_at)} — {local(a.journey.inbound[a.journey.inbound.length-1].arrives_at)}</p><p>{a.known_total ? `${formatMoney(a.known_total)} in prices found so far` : "Total unavailable"} · Some costs are missing, so this is not a full price comparison.</p><p className="fine">Ask to change your transport mode, budget or room preferences to revise the plan.</p></section>)}</details>}
     {!!trip.gaps?.length && <aside className="notice"><strong>Before you book</strong><ul>{trip.gaps.map(g => <li key={g}>{g}</li>)}</ul></aside>}</article>)}<p className="fine">{itinerary.caveats?.join(" ")}</p></div>;
 }
-function Transport({ leg }: { leg: Leg }) { return <section className="travel-card"><span className="card-label">{leg.mode.toUpperCase()} · {leg.operator} {leg.service_number}</span><h3>{leg.origin} <span className="muted">→</span> {leg.destination}</h3><p>{local(leg.departs_at)} → {local(leg.arrives_at)}</p><Price item={leg} />{leg.caveats?.map(c => <p className="fine" key={c}>{c}</p>)}</section>; }
+function Transport({ leg }: { leg: Leg }) { return <section className="travel-card"><span className="card-label">{leg.mode.toUpperCase()} · {leg.operator} {leg.service_number}</span><h3>{leg.origin} <span className="muted arrow">→</span> {leg.destination}</h3><p>{local(leg.departs_at)} <span className="arrow">→</span> {local(leg.arrives_at)}</p><Price item={leg} />{leg.caveats?.map(c => <p className="fine" key={c}>{c}</p>)}</section>; }

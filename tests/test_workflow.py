@@ -116,6 +116,95 @@ async def test_no_draft_sends_failure_notice(environment, session_input):
     assert result.phase == "failed" and result.email_kind == "failure_notice" and len(emails) == 1
 
 
+@pytest.mark.parametrize(
+    ("origin", "fixture_id", "destination", "suggest_trains", "mixed_failure"),
+    [
+        ("Edinburgh", "uel-2026-lyon-away", "Lyon", True, False),
+        ("Nottingham", "uel-2026-jagiellonia-away", "Warsaw", False, False),
+        ("Nottingham", "uel-2026-jagiellonia-away", "Warsaw", False, True),
+    ],
+)
+async def test_no_nonstop_flights_explains_failed_city_search(
+    environment,
+    session_input,
+    origin,
+    fixture_id,
+    destination,
+    suggest_trains,
+    mixed_failure,
+):
+    from datetime import UTC, datetime
+
+    from cpfc_trip.catalog import load_catalog, validate_brief
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.origins import routes_for_origin
+    from cpfc_trip.planner.recorded import sample
+
+    flight_calls = 0
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        nonlocal flight_calls
+        flight_calls += 1
+        if mixed_failure and flight_calls == 2:
+            return SearchBatch(
+                gaps=("No complete flight and Warsaw–Białystok train connection was verified.",)
+            )
+        return SearchBatch(
+            gaps=(
+                "No nonstop or suitable one-stop flights were found for this route and date pair.",
+            )
+        )
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    fixtures, catalog_routes = load_catalog()
+    fixture = next(item for item in fixtures if item.id == fixture_id)
+    brief = session_input.brief.model_copy(
+        update={
+            "origin_city": origin,
+            "transport_mode": "flight",
+            "fixture_ids": (fixture_id,),
+            "windows": (),
+        }
+    )
+    brief = validate_brief(brief, (fixture,), datetime.now(UTC))
+    routes = routes_for_origin(
+        tuple(route for route in catalog_routes if route.fixture_id == fixture_id), origin
+    )
+    value = session_input.model_copy(
+        update={"brief": brief, "fixtures": (fixture,), "routes": routes, "planner_mode": "live"}
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        result = await environment.client.execute_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+    assert result.phase == "failed" and result.email_kind == "failure_notice"
+    if mixed_failure:
+        assert "No nonstop or suitable one-stop flights" not in result.transcript_tail[-1].content
+        assert "couldn't find a complete trip" in result.transcript_tail[-1].content
+        return
+    assert (
+        f"No nonstop or suitable one-stop flights were found from {origin} to {destination}"
+        in result.transcript_tail[-1].content
+    )
+    assert ("Try trains" in result.transcript_tail[-1].content) is suggest_trains
+    if destination == "Warsaw":
+        assert "train to Białystok" in result.transcript_tail[-1].content
+
+
 async def test_durable_pydantic_model_and_query_during_activity(
     environment, session_input, monkeypatch
 ):
@@ -166,7 +255,15 @@ async def test_durable_pydantic_model_and_query_during_activity(
     async def deliver(state: Snapshot) -> str:
         return "test-email"
 
-    value = session_input.model_copy(update={"planner_mode": "live", "routes": ()})
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (),
+            "brief": session_input.brief.model_copy(
+                update={"extra_instructions": "Please consider my request."}
+            ),
+        }
+    )
     queue = str(uuid4())
     async with Worker(
         environment.client, task_queue=queue, workflows=[Workflow], activities=[deliver]
@@ -188,6 +285,41 @@ async def test_durable_pydantic_model_and_query_during_activity(
     history = await handle.fetch_history()
     await Replayer(workflows=[Workflow], plugins=[PydanticAIPlugin()]).replay_workflow(history)
     assert len(calls) == 1  # Replay uses the completed model Activity result.
+
+
+async def test_model_failure_is_not_reported_as_search_exhaustion(
+    environment, session_input, monkeypatch
+):
+    from cpfc_trip.planner.agent import model
+
+    async def unavailable(**kwargs):
+        raise RuntimeError("simulated private provider detail")
+
+    monkeypatch.setattr(model.client.aio.models, "generate_content", unavailable)
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "brief": session_input.brief.model_copy(
+                update={"extra_instructions": "Please consider my request."}
+            ),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client, task_queue=queue, workflows=[Workflow], activities=[deliver]
+    ):
+        result = await environment.client.execute_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+    assert result.phase == "failed"
+    assert "planning service" in result.transcript_tail[-1].content.lower()
+    assert "search limits" not in result.transcript_tail[-1].content.lower()
+    assert "private provider detail" not in result.transcript_tail[-1].content
 
 
 async def test_live_revision_reuses_searches_after_worker_restart(
@@ -261,7 +393,10 @@ async def test_live_revision_reuses_searches_after_worker_restart(
         first = await ready(handle)
         assert "Falsely" not in first.transcript_tail[-1].content
         count = len(searches)
-        assert count == 6  # Three date pairs; each hotel search runs only once.
+        assert count == 4  # Two waves give one verified option and one comparison.
+        assert searches[0][1:] == searches[1][1:]
+        assert searches[2][1:] == searches[3][1:]
+        assert searches[0][1:] != searches[2][1:]
     async with Worker(
         environment.client, task_queue=queue, workflows=[Workflow], activities=activities
     ):
@@ -270,10 +405,127 @@ async def test_live_revision_reuses_searches_after_worker_restart(
         )
         second = await ready(handle)
         assert second.itinerary.revision == first.itinerary.revision + 1
-        assert len(searches) == count
+        # A budget change refreshes hotel preferences while keeping transport evidence.
+        assert [search for search in searches if search[0] == "flight"] == [
+            search for search in searches[:count] if search[0] == "flight"
+        ]
+        assert len(searches) == count + 2
         await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
         await handle.result()
     await Replayer(workflows=[Workflow], plugins=[PydanticAIPlugin()]).replay_workflow(
         await handle.fetch_history()
     )
-    assert len(searches) == count
+    assert len(searches) == count + 2
+
+
+async def test_slow_comparison_keeps_first_complete_wave(environment, session_input):
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.planning import enumerate_specs
+    from cpfc_trip.planner.recorded import sample
+
+    first_spec = enumerate_specs(session_input.brief, session_input.fixtures, session_input.routes)[
+        0
+    ]
+    first_dates = (first_spec.outbound_date, first_spec.return_date)
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        if (spec.outbound_date, spec.return_date) != first_dates:
+            await asyncio.sleep(6)
+        return sample(spec, "flight")
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        if (spec.outbound_date, spec.return_date) != first_dates:
+            await asyncio.sleep(6)
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "limits": Limits(initial_seconds=5),
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        state = await ready(handle)
+        assert state.itinerary and state.itinerary.trips[0].journey
+        assert state.itinerary.trips[0].stay
+        await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
+        await handle.result()
+
+
+async def test_first_journey_is_visible_while_hotel_search_continues(
+    environment, session_input, monkeypatch
+):
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.agent import model
+    from cpfc_trip.planner.recorded import sample
+
+    async def fake_model(**kwargs):
+        raise AssertionError("Structured form inputs should not need Gemini")
+
+    monkeypatch.setattr(model.client.aio.models, "generate_content", fake_model)
+    hotel_started = asyncio.Event()
+    release_hotel = asyncio.Event()
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "flight")
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        hotel_started.set()
+        await release_hotel.wait()
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        await asyncio.wait_for(hotel_started.wait(), timeout=5)
+        for _ in range(50):
+            state = await handle.query(Workflow.get_snapshot)
+            if state.preview_trip:
+                break
+            await asyncio.sleep(0.05)
+        assert state.phase == "researching"
+        assert state.itinerary is None
+        assert state.preview_trip is not None
+        assert state.preview_trip.journey is not None
+        assert state.preview_trip.stay is None
+        release_hotel.set()
+        completed = await ready(handle)
+        assert completed.itinerary and completed.itinerary.trips[0].stay
+        assert completed.preview_trip is None
+        await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
+        await handle.result()

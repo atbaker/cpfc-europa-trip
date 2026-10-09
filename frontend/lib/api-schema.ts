@@ -162,6 +162,11 @@ export interface components {
             /** Fixture Ids */
             fixture_ids: string[];
             /**
+             * Origin City
+             * @default London
+             */
+            origin_city: string;
+            /**
              * @default {
              *       "adults": 1,
              *       "child_ages": [],
@@ -285,6 +290,11 @@ export interface components {
             /** Venue */
             venue: string;
             /**
+             * Venue Location
+             * @default
+             */
+            venue_location: string;
+            /**
              * Venue Status
              * @default provisional
              * @enum {string}
@@ -384,6 +394,15 @@ export interface components {
              * @default []
              */
             caveats: string[];
+        };
+        /** MapsTransfer */
+        MapsTransfer: {
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Url */
+            url: string;
         };
         /** MessageCommand */
         MessageCommand: {
@@ -505,6 +524,11 @@ export interface components {
              */
             public_session_id: string;
             /**
+             * Origin City
+             * @default London
+             */
+            origin_city: string;
+            /**
              * State Revision
              * @default 0
              */
@@ -521,6 +545,7 @@ export interface components {
              */
             progress_message: string;
             itinerary?: components["schemas"]["Itinerary"] | null;
+            preview_trip?: components["schemas"]["Trip"] | null;
             /**
              * Transcript Tail
              * @default []
@@ -649,6 +674,11 @@ export interface components {
              * @default []
              */
             transfers: components["schemas"]["TransferGuidance"][];
+            /**
+             * Maps Transfers
+             * @default []
+             */
+            maps_transfers: components["schemas"]["MapsTransfer"][];
             /**
              * Alternatives
              * @default []

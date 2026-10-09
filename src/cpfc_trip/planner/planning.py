@@ -1,6 +1,7 @@
 """Pure enumeration, feasibility and ranking. No I/O and no invented commercial facts."""
 
 from datetime import timedelta
+from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from cpfc_trip.domain import (
@@ -16,6 +17,7 @@ from cpfc_trip.domain import (
     Trip,
 )
 from cpfc_trip.planner.agent import Intent
+from cpfc_trip.planner.maps_links import transfer_links
 from cpfc_trip.planner.prices import total
 
 
@@ -57,7 +59,7 @@ def enumerate_specs(
             for start, end in pairs
             for r in allowed
         ]
-        grouped.append(options[:1] if recorded else options)
+        grouped.append(options[: len(allowed)] if recorded else options)
     # Give every selected fixture an initial route/date candidate before spending on alternatives.
     return [
         options[index]
@@ -75,6 +77,34 @@ def feasible(
     intent: Intent,
     route: Route | None = None,
 ) -> bool:
+    if not feasible_journey(journey, fixture, brief, intent, route):
+        return False
+    outbound, inbound = journey.outbound, journey.inbound
+    if (
+        stay.check_in != outbound[-1].arrives_at.astimezone(ZoneInfo(fixture.timezone)).date()
+        or stay.check_out != inbound[0].departs_at.astimezone(ZoneInfo(fixture.timezone)).date()
+    ):
+        return False
+    if intent.private_room and stay.room_type != "private":
+        return False
+    if intent.private_bathroom and stay.bathroom != "private":
+        return False
+    if (
+        stay.max_guests is not None
+        and stay.max_guests * brief.travellers.rooms < brief.travellers.size
+    ):
+        return False
+    return True
+
+
+def feasible_journey(
+    journey: Journey,
+    fixture: Fixture,
+    brief: Brief,
+    intent: Intent,
+    route: Route | None = None,
+) -> bool:
+    """Check that a dated return journey fits the brief before showing it."""
     window = next(w for w in brief.windows if w.fixture_id == fixture.id)
     if intent.unsupported_requirements:
         return False
@@ -92,10 +122,10 @@ def feasible(
             < route.gateway_departure_hours[1]
         ):
             return False
-        if route.mode == "rail" and any(
+        if (route.mode == "rail" or route.onward_stations) and any(
             b.departs_at - a.arrives_at < timedelta(minutes=route.minimum_transfer_minutes)
             for direction in (outbound, inbound)
-            for a, b in zip(direction, direction[1:], strict=False)
+            for a, b in pairwise(direction)
         ):
             return False
     if (
@@ -108,25 +138,11 @@ def feasible(
     if inbound[0].departs_at < fixture.kickoff_at + timedelta(hours=5):
         return False
     for direction in (outbound, inbound):
-        if any(b.departs_at < a.arrives_at for a, b in zip(direction, direction[1:], strict=False)):
+        if any(b.departs_at < a.arrives_at for a, b in pairwise(direction)):
             return False
-    if (
-        stay.check_in != outbound[-1].arrives_at.astimezone(ZoneInfo(fixture.timezone)).date()
-        or stay.check_out != inbound[0].departs_at.astimezone(ZoneInfo(fixture.timezone)).date()
-    ):
-        return False
-    if intent.private_room and stay.room_type != "private":
-        return False
-    if intent.private_bathroom and stay.bathroom != "private":
-        return False
     if intent.preferred_airports and (
         outbound[0].origin not in intent.preferred_airports
         or inbound[-1].destination not in intent.preferred_airports
-    ):
-        return False
-    if (
-        stay.max_guests is not None
-        and stay.max_guests * brief.travellers.rooms < brief.travellers.size
     ):
         return False
     return True
@@ -191,7 +207,11 @@ def choose(
         route.transfer_note,
         "Confirm late check-in and post-match access to the accommodation.",
     ]
-    if route.onward_stations and route.mode != "rail":
+    if (
+        route.onward_stations
+        and route.mode != "rail"
+        and all(leg.mode != "rail" for leg in journey.outbound)
+    ):
         # Never label an airport-only journey as a complete trip to an onward destination.
         gaps.append("Onward rail has not been verified; this is an incomplete travel option.")
     if fixture.venue_status != "confirmed":
@@ -227,6 +247,7 @@ def choose(
         gaps=tuple(gaps),
         feasibility="needs_checks",
         transfers=route.guidance,
+        maps_transfers=transfer_links(brief.origin_city, journey, stay, fixture),
         alternatives=tuple(alternatives),
         summary=f"{'Prioritises lower known costs among the checked options' if brief.budget_tier == 'budget' else 'Balanced price and journey time' if brief.budget_tier == 'value' else 'Prioritises shorter journeys and more comfortable stays'}. Transfer fares and outstanding checks are excluded.",
     )

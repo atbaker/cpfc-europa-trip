@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from cpfc_trip.catalog import load_catalog, validate_brief
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import CreateSession, Limits, SessionInput
+from cpfc_trip.origins import LIVE_ORIGINS, routes_for_origin
 from cpfc_trip.persistence.models import SessionRow
 
 
@@ -39,13 +40,28 @@ class Repository:
                 return SessionInput.model_validate(old.workflow_input)
             fixtures, routes = load_catalog()
             brief = validate_brief(request.brief, fixtures, datetime.now(UTC))
+            if self.settings.planner_mode == "live" and brief.origin_city not in LIVE_ORIGINS:
+                raise ValueError(
+                    "This departure city is not currently supported for live planning. Choose a city shown in the planner."
+                )
+            routes = routes_for_origin(routes, brief.origin_city)
+            if brief.transport_mode == "rail" and any(
+                not any(
+                    route.mode == "rail" and route.enabled and route.fixture_id == fixture_id
+                    for route in routes
+                )
+                for fixture_id in brief.fixture_ids
+            ):
+                raise ValueError(
+                    "Train search is not available for this match from this city. Choose flights or another match."
+                )
             if self.settings.planner_mode == "live":
                 enabled = {r.fixture_id for r in routes if r.enabled}
                 if not set(brief.fixture_ids) <= enabled:
                     raise ValueError("Live planning is not yet enabled for this fixture")
                 if brief.travellers.child_ages or brief.travellers.rooms != 1:
                     raise ValueError(
-                        "The live Lyon preview currently supports adults sharing one room. Child and multi-room pricing are still being validated."
+                        "Live planning currently supports adults sharing one room. Child and multi-room pricing are still being validated."
                     )
             sid = uuid4()
             data = SessionInput(
@@ -54,6 +70,9 @@ class Repository:
                 brief=brief,
                 fixtures=tuple(f for f in fixtures if f.id in brief.fixture_ids),
                 routes=tuple(r for r in routes if r.fixture_id in brief.fixture_ids),
+                catalog_version=next(
+                    f.catalog_version for f in fixtures if f.id in brief.fixture_ids
+                ),
                 planner_mode=self.settings.planner_mode,
                 limits=Limits(inactivity_seconds=self.settings.inactivity_timeout_seconds),
             )

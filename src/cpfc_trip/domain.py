@@ -39,6 +39,7 @@ class Window(Record):
 
 class Brief(Record):
     fixture_ids: tuple[str, ...] = Field(min_length=1, max_length=4)
+    origin_city: str = Field("London", min_length=2, max_length=50)
     travellers: Party = Party()
     budget_tier: Literal["budget", "value", "comfort"] = "value"
     flexibility: Literal["tight", "day_either_side", "two_days"] = "day_either_side"
@@ -71,6 +72,7 @@ class Fixture(Record):
     timezone: str
     kickoff_at: AwareDatetime
     venue: str
+    venue_location: str = ""
     venue_status: Literal["provisional", "confirmed"] = "provisional"
     source_url: str
     source_checked_at: AwareDatetime
@@ -82,6 +84,12 @@ class TransferGuidance(Record):
     description: str
     source_url: str
     reviewed_at: AwareDatetime
+
+
+class MapsTransfer(Record):
+    title: str
+    description: str
+    url: str
 
 
 class Route(Record):
@@ -123,7 +131,7 @@ class SessionInput(Record):
     routes: tuple[Route, ...]
     limits: Limits = Limits()
     planner_mode: Literal["live", "recorded"] = "live"
-    catalog_version: str = "2026-09-06.1"
+    catalog_version: str = "2026-10-05.away.1"
 
 
 class Money(Record):
@@ -228,6 +236,7 @@ class Trip(Record):
     gaps: tuple[str, ...] = ()
     summary: str
     transfers: tuple[TransferGuidance, ...] = Field((), max_length=5)
+    maps_transfers: tuple[MapsTransfer, ...] = Field((), max_length=3)
     alternatives: tuple[Alternative, ...] = Field((), max_length=2)
 
 
@@ -280,10 +289,14 @@ Phase = Literal[
 class Snapshot(Record):
     development_mode: bool = False
     public_session_id: UUID
+    origin_city: str = "London"
     state_revision: int = 0
     phase: Phase = "created"
     progress_message: str = "Checking routes from London…"
     itinerary: Itinerary | None = None
+    # A checked return journey may be shown while accommodation is still being searched.
+    # It is never the saved or emailed itinerary.
+    preview_trip: Trip | None = None
     transcript_tail: tuple[ChatTurn, ...] = ()
     active_turn_id: UUID | None = None
     last_committed_turn_id: UUID | None = None

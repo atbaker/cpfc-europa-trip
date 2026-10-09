@@ -2,27 +2,29 @@
   "fixtures": [
     {
       "id": "uel-2026-lyon-away",
-      "opponent": "Lyon",
+      "opponent": "Olympique Lyonnais",
       "city": "Lyon",
       "timezone": "Europe/Paris",
       "kickoff_at": "2026-10-15T16:45:00Z",
-      "venue": "Groupama Stadium",
+      "venue": "Parc Olympique Lyonnais",
       "venue_status": "provisional",
-      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
-      "source_checked_at": "2026-09-07T21:30:00Z",
-      "catalog_version": "2026-09-07.lyon.1"
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1",
+      "venue_location": "Décines-Charpieu, France"
     },
     {
       "id": "uel-2026-besiktas-away",
-      "opponent": "Beşiktaş",
+      "opponent": "Beşiktaş J.K.",
       "city": "Istanbul",
       "timezone": "Europe/Istanbul",
       "kickoff_at": "2026-10-22T19:00:00Z",
       "venue": "Tüpraş Stadium",
       "venue_status": "provisional",
-      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
-      "source_checked_at": "2026-09-06T00:00:00Z",
-      "catalog_version": "2026-09-06.1"
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1",
+      "venue_location": "Istanbul, Türkiye"
     },
     {
       "id": "uel-2026-jagiellonia-away",
@@ -30,23 +32,25 @@
       "city": "Białystok",
       "timezone": "Europe/Warsaw",
       "kickoff_at": "2026-12-10T17:45:00Z",
-      "venue": "Białystok City Stadium",
+      "venue": "Bialystok City Stadium",
       "venue_status": "provisional",
-      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
-      "source_checked_at": "2026-09-06T00:00:00Z",
-      "catalog_version": "2026-09-06.1"
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1",
+      "venue_location": "Białystok, Poland"
     },
     {
       "id": "uel-2026-salzburg-away",
-      "opponent": "Salzburg",
+      "opponent": "FC Red Bull Salzburg",
       "city": "Salzburg",
       "timezone": "Europe/Vienna",
       "kickoff_at": "2027-01-28T20:00:00Z",
       "venue": "Red Bull Arena",
       "venue_status": "provisional",
-      "source_url": "https://www.cpfc.co.uk/news/announcement/revealed-our-europa-league-league-phase-opponents/",
-      "source_checked_at": "2026-09-06T00:00:00Z",
-      "catalog_version": "2026-09-06.1"
+      "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
+      "source_checked_at": "2026-10-05T00:00:00Z",
+      "catalog_version": "2026-10-05.away.1",
+      "venue_location": "Kleßheim, Austria"
     }
   ],
   "routes": [
@@ -96,10 +100,30 @@
       "origin": "LHR,LGW,STN,LTN",
       "destination": "IST",
       "destination_timezone": "Europe/Istanbul",
-      "enabled": false,
+      "enabled": true,
       "onward_stations": [],
       "minimum_transfer_minutes": 180,
-      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+      "transfer_note": "Istanbul Airport has a metro connection into the city. The airport-to-hotel and hotel-to-stadium transfers are separate and unpriced; confirm current service and away-supporter access.",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "source_urls": [
+        "https://www.metro.istanbul/Content/assets/uploaded/A%C4%9F%20Haritas%C4%B1.pdf"
+      ],
+      "gateway_arrival_hours": [
+        6,
+        23
+      ],
+      "gateway_departure_hours": [
+        6,
+        23
+      ],
+      "guidance": [
+        {
+          "title": "Istanbul airport and city transfer",
+          "description": "Istanbul Airport has a metro connection into the city. The airport-to-hotel and hotel-to-stadium transfers are separate and unpriced; confirm current service and away-supporter access.",
+          "source_url": "https://www.metro.istanbul/Content/assets/uploaded/A%C4%9F%20Haritas%C4%B1.pdf",
+          "reviewed_at": "2026-10-05T00:00:00Z"
+        }
+      ]
     },
     {
       "id": "london-saw",
@@ -120,13 +144,33 @@
       "origin": "LHR,LGW,STN,LTN",
       "destination": "WAW",
       "destination_timezone": "Europe/Warsaw",
-      "enabled": false,
+      "enabled": true,
       "onward_stations": [
         "Warsaw",
         "Białystok"
       ],
       "minimum_transfer_minutes": 180,
-      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+      "transfer_note": "Change between Warsaw Chopin Airport and Warsaw Central separately. Direct Warsaw Central–Zielone Wzgórza train times must be verified on both travel dates, with at least three hours for each airport/station transfer. Rail fares and the Białystok station-to-stadium transfer are not included.",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "source_urls": [
+        "https://www.skm.warszawa.pl/en/faq-2/"
+      ],
+      "gateway_arrival_hours": [
+        6,
+        23
+      ],
+      "gateway_departure_hours": [
+        6,
+        23
+      ],
+      "guidance": [
+        {
+          "title": "Warsaw and Białystok rail connection",
+          "description": "Change between Warsaw Chopin Airport and Warsaw Central separately. Direct Warsaw Central–Zielone Wzgórza train times must be verified on both travel dates, with at least three hours for each airport/station transfer. Rail fares and the Białystok station-to-stadium transfer are not included.",
+          "source_url": "https://www.skm.warszawa.pl/en/faq-2/",
+          "reviewed_at": "2026-10-05T00:00:00Z"
+        }
+      ]
     },
     {
       "id": "london-szg",
@@ -135,10 +179,30 @@
       "origin": "LHR,LGW,STN,LTN",
       "destination": "SZG",
       "destination_timezone": "Europe/Vienna",
-      "enabled": false,
+      "enabled": true,
       "onward_stations": [],
       "minimum_transfer_minutes": 180,
-      "transfer_note": "Candidate pattern: fixture-date and local transfer evidence must be reviewed before enabling."
+      "transfer_note": "Salzburg Airport publishes bus links to the city and main station. Airport, hotel and stadium transfers are separate and unpriced; confirm service times and away-supporter instructions.",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "source_urls": [
+        "https://www.salzburg-airport.com/en/flights-arrival/arrival-to-the-airport/public-transportation"
+      ],
+      "gateway_arrival_hours": [
+        6,
+        23
+      ],
+      "gateway_departure_hours": [
+        6,
+        23
+      ],
+      "guidance": [
+        {
+          "title": "Salzburg airport and city transfer",
+          "description": "Salzburg Airport publishes bus links to the city and main station. Airport, hotel and stadium transfers are separate and unpriced; confirm service times and away-supporter instructions.",
+          "source_url": "https://www.salzburg-airport.com/en/flights-arrival/arrival-to-the-airport/public-transportation",
+          "reviewed_at": "2026-10-05T00:00:00Z"
+        }
+      ]
     },
     {
       "id": "london-muc",
