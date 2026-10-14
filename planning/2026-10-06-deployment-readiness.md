@@ -115,3 +115,15 @@ and its 200 response transfers 3,848 bytes. The final hosted Lighthouse scores w
 99/100/100/100 and desktop 100/100/100/100, with no image-delivery finding and mobile LCP 2.0 s.
 This beta still needs provider acceptance monitoring, privacy/vendor retention review, and traffic
 controls beyond the current per-process session limit.
+
+## 14 October 2026 — no-result email suppression and Resend key update
+
+The no-result workflow now ends with an on-page explanation and no email Activity when no
+itinerary was committed. A Temporal patch preserves replay of old failure-notice histories.
+Deployment `e92a6eb1-0555-49f1-b62f-8b15125e43d2` built commit `83118ae` and reached
+`ACTIVE`. The owner replaced `RESEND_API_KEY` in the local ignored `.env` and asked to apply it
+to DigitalOcean. The new value was copied into the ignored app spec without displaying it;
+schema validation passed. Configuration deployment `9543f88e-807c-40da-893f-c1074f882cb1`
+reached `ACTIVE`, with the Resend secret slot present. Hosted `/` and `/healthz` returned 200
+and `/privacy/` displayed the new policy. No actual email was sent to verify the key's
+delivery permission; no paid live route search was run.
