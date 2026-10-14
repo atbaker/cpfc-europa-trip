@@ -225,4 +225,5 @@
 ## 14 October 2026 — simplify the trip brief
 
 - Removed the optional “Anything else?” free-text field after the owner observed that custom constraints often led to failed trips. New form submissions send `extra_instructions: ""`; the backend schema and workflow handling remain for already-created sessions. The structured departure, match, dates, travel style, room and transport controls are unchanged.
-- All 28 frontend tests, TypeScript checking, ESLint and a production build passed. The generated home page no longer contains the field label. This is a UI submission change; it does not establish improved live route completion rates. Hosted rollout is pending.
+- All 28 frontend tests, TypeScript checking, ESLint and a production build passed. The generated home page no longer contains the field label. This is a UI submission change; it does not establish improved live route completion rates.
+- DigitalOcean deployment `e559a982-3599-4fe8-840a-1218be165e1d` reached `ACTIVE`. The public `https://eaglesaway.com/` and `/healthz` returned HTTP 200; the home HTML contained the details step but no “Anything else?” label. DigitalOcean still listed two planner instances. No new paid trip or email was submitted during hosted verification.
