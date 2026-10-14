@@ -191,14 +191,6 @@ Restart both API and worker after changing planning mode; restart the worker for
 SearchAPI's separate `remaining_credits` can be zero on a paid subscription: check monthly
 allowance minus usage too. Account verification does not prove every search engine works.
 
-### Operational telemetry
-
-Set `LOGFIRE_ENABLED=true` and a server-side `LOGFIRE_TOKEN` to send API timing and
-Pydantic AI model spans to Logfire. API events use fixed route labels, status codes and
-durations; model spans exclude prompt, response and tool content. Neither the browser
-nor the exported frontend receives the token. Leave telemetry disabled for local work
-unless you intend to send diagnostics to the configured Logfire project.
-
 ### Email
 
 Keep `EMAIL_MODE=preview` for routine development. `EMAIL_MODE=resend` performs actual delivery

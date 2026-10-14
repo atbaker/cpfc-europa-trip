@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-import logfire
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -34,7 +33,6 @@ from cpfc_trip.origins import LIVE_ORIGINS, UK_RAIL
 from cpfc_trip.persistence.database import engine
 from cpfc_trip.persistence.models import DeliveryRow, WebhookRow
 from cpfc_trip.persistence.repository import Repository
-from cpfc_trip.telemetry import configure_telemetry, safe_api_route
 from cpfc_trip.temporal.client import connect
 from cpfc_trip.temporal.workflow import TravelPlanningSessionWorkflow
 
@@ -348,23 +346,6 @@ def create_app(
 
 
 def main() -> None:
-    settings = Settings()
-    configure_telemetry(settings, "api")
-    app = create_app(settings)
-    if settings.logfire_enabled:
-
-        @app.middleware("http")
-        async def record_request(request: Request, call_next: Any) -> Response:
-            route = safe_api_route(request.method, request.url.path)
-            started = time.perf_counter()
-            response: Response = await call_next(request)
-            if route is not None:
-                logfire.info(
-                    "API request completed",
-                    route=route,
-                    status_code=response.status_code,
-                    elapsed_ms=round((time.perf_counter() - started) * 1000),
-                )
-            return response
-
-    uvicorn.run(app, host="0.0.0.0", port=8000, access_log=False)
+    uvicorn.run(
+        "cpfc_trip.api:create_app", factory=True, host="0.0.0.0", port=8000, access_log=False
+    )

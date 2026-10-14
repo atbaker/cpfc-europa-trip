@@ -546,8 +546,7 @@ Use the current capability-based integration documented by [Pydantic AI](https:/
 
 - `Agent(..., capabilities=[TemporalDurability()])` with ordinary durable `Agent.run()` calls that return completed output;
 - `PydanticAIWorkflow` with stable `__pydantic_ai_agents__`;
-- `PydanticAIPlugin()` on worker and FastAPI Temporal clients; and
-- `LogfirePlugin()` with explicit PII scrubbing.
+- `PydanticAIPlugin()` on worker and FastAPI Temporal clients.
 
 Do not use the older `TemporalAgent` wrapper; it is deprecated and planned for removal in Pydantic AI v3. Give the agent and every toolset a stable explicit name/ID because those names become Activity identities and cannot casually change while histories are live.
 
@@ -902,7 +901,7 @@ Proposed posture, subject to review:
 - no marketing language, cross-sell, newsletter signup, or tracking pixel in the itinerary email;
 - just-in-time notice beside the email field plus a full privacy page;
 - store email encrypted in Cloud SQL and refer to it by `contact_id` elsewhere;
-- redact email, free text, and fine-grained trip details from logs and Logfire by default;
+- redact email, free text, and fine-grained trip details from logs by default;
 - do not send contact details in SearchApi queries, model prompts, or outbound URLs;
 - use a Temporal Payload Codec backed by Cloud KMS if itinerary/preferences in Workflow payloads are in the threat model;
 - define and automate retention for contacts, saved itineraries, email-delivery records, and Workflow History; and
@@ -939,15 +938,10 @@ Do not invent the exact retention period here. Choose it with Temporal Cloud His
 
 ## Observability and evaluation
 
-### Logfire
-
-Use `LogfirePlugin()` so Temporal Workflow/Activity telemetry and Pydantic AI model/tool spans form one trace. Instrument FastAPI and provider HTTP clients, but configure scrubbing before sending production traffic. Trace IDs should correlate session, Workflow, provider calls, and email without using email as an attribute. Measure Query latency, errors, unchanged-response rate, worker replay/cache behavior, and time from turn commit to browser display; omit transcript/snapshot bodies from polling telemetry.
-
-The first deployed Logfire integration is deliberately narrower: opt-in API request timing
-with fixed route labels and status codes, plus Pydantic AI spans with content disabled.
-It does not instrument raw HTTP requests or Temporal payloads, since those can include
-session IDs, email addresses, trip details, or provider credentials. Broader tracing
-requires a separate privacy review and explicit redaction tests.
+Keep the existing sanitized application logs for model attempt timing and failures. Do not
+send request bodies, session IDs, email addresses, or model content to an external tracing
+service. Review operational diagnostics against concrete incidents before adding another
+observability integration.
 
 ### Deterministic checks and curated examples
 
@@ -972,7 +966,7 @@ an infeasible route pass. Keep meaningful Workflow replay/failure and provider c
 
 Developers review the curated outputs for usefulness, clarity, meaningful alternatives, budget
 fit, and constraint preservation. This is pre-release QA, not a dependency of live sessions.
-Keep ordinary Logfire traces for debugging and observed request cost. Defer automated LLM
+Use existing application logs for debugging and observed request cost. Defer automated LLM
 judges, judge calibration, and detailed tool-trajectory scoring until concrete quality problems
 justify them. No separate evaluator platform is required for the initial build.
 
@@ -1118,7 +1112,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Complete Q&A responses and curated progress for every applicable turn; typed itinerary revisions remain atomic.
 - Transactional itinerary email template, direct outbound links, privacy/brand/accessibility copy, and branded static assets.
 - Enforced mobile Web Vitals, accessibility, and bundle budgets on the production export.
-- Curated deterministic scenario set, developer-reviewed example outputs, and ordinary Logfire traces; no automated LLM judges.
+- Curated deterministic scenario set and developer-reviewed example outputs; no automated LLM judges.
 
 **Exit:** every fixture/tier meets mode-specific feasibility, honesty, freshness, latency, and coverage thresholds; incomplete price coverage is permitted only when the UI says so.
 
@@ -1187,7 +1181,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 9. **Email:** freeze and send the latest committed revision unchanged, preserving price timestamps and caveats. Initial failure sends no email. Use a single session-level idempotency key and durable delivery record for valid plans.
 10. **Route scope:** plan from London hubs using a minimal catalog tied to the four Palace fixtures. Defer nationwide origins, arbitrary gateway discovery, and coach/ferry search.
 11. **Conversation scope:** start with ten follow-ups, a 30-minute interaction window, three minutes for initial planning, and 90 seconds per follow-up, plus explicit call budgets. Defer summarization and Continue-As-New; verify bounded History/payload growth.
-12. **Evaluation:** deterministic checks, provider contracts, a small curated scenario set, developer quality review, and Logfire traces. Defer automated LLM judges and trajectory-scoring machinery.
+12. **Evaluation:** deterministic checks, provider contracts, a small curated scenario set, and developer quality review. Defer automated LLM judges and trajectory-scoring machinery.
 
 Public self-serve with automated research, revisions, and finalization is the sole MVP operating model. The remaining fidelity cases are integration/readiness work, not an open provider-selection spike. The detailed spike report retains the observed discrepancies and validation boundaries; the 6 September decision accepts them with estimated-price labeling and external-search handoffs.
 
