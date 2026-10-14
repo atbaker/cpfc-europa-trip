@@ -239,4 +239,5 @@
 ## 14 October 2026 — centered club credit
 
 - The owner refined the header to read “Built for” above the crest, centered across the page. Powered by Temporal remains at the right on desktop. At 360px and below, the wordmark and Temporal credit stack above the centered crest so their labels do not touch. The crest asset and official palette did not change.
-- The Next.js production build and ESLint passed. Rendered widths 1440, 390 and 320px had a centered credit and no horizontal overflow; the narrow layout displayed the two labels on separate rows. This is a frontend-only change; a live rollout is pending.
+- The Next.js production build and ESLint passed. Rendered widths 1440, 390 and 320px had a centered credit and no horizontal overflow; the narrow layout displayed the two labels on separate rows. This was a frontend-only change.
+- DigitalOcean deployment `bc59dcf6-b9bd-4c38-be2f-aaa93e433454` reached `ACTIVE`. The live home page at 1440, 390 and 320px showed “Built for” with the crest centered exactly and no horizontal overflow. `/healthz` returned HTTP 200. The app spec retained two `planner-brand` replicas on the existing immutable worker branch. No trip search or email was submitted during this visual release.
