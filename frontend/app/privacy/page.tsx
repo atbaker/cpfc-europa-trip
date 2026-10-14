@@ -4,8 +4,9 @@ export default function Privacy() {
       <p className="eyebrow">PRIVACY & YOUR DATA</p>
       <h1>Your data</h1>
       <p>
-        Eagles Away uses your trip details and email address to plan an away day and send one
-        itinerary or planning failure notice. We do not create an account or marketing subscription.
+        Eagles Away uses your trip details and email address to plan an away day and send your
+        itinerary if we find a complete trip. If we cannot find one, no email is sent. We do not
+        create an account or marketing subscription.
         For access or deletion requests, email <a href="mailto:shy.ruparel@temporal.io">shy.ruparel@temporal.io</a>.
       </p>
       <h2>Planning and email</h2>

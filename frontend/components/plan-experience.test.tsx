@@ -44,6 +44,20 @@ describe("trip plan", () => {
     expect(screen.queryByRole("region", { name: "Your conversation" })).not.toBeInTheDocument();
   });
 
+  it("explains that an unsuccessful search sends no email", async () => {
+    state.snapshot = { ...snapshot, phase: "failed", itinerary: null, email_status: "not_requested" };
+    render(<PlanExperience />);
+    expect(await screen.findByText(/No email was sent/)).toBeVisible();
+    expect(screen.queryByText("Take the plan with you.")).not.toBeInTheDocument();
+  });
+
+  it("does not claim older failure-notice sessions sent no email", async () => {
+    state.snapshot = { ...snapshot, phase: "failed", itinerary: null, email_kind: "failure_notice", email_status: "sent" };
+    render(<PlanExperience />);
+    expect(await screen.findByText(/No itinerary was saved/)).toBeVisible();
+    expect(screen.queryByText(/No email was sent/)).not.toBeInTheDocument();
+  });
+
   it("shows a checked journey as an incomplete preview while hotels are pending", async () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
     const outbound = { id: "outbound", kind: "transport", mode: "flight", origin: "Manchester", destination: "Lyon", departs_at: "2026-10-14T08:00:00Z", arrives_at: "2026-10-14T10:00:00Z", operator: "Example Air", service_number: "EA1", quote: null, offer: { evidence: { underlying_source: "Google Flights", provider: "SearchApi" } }, caveats: [] };

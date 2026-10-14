@@ -92,7 +92,7 @@ export function PlanExperience() {
       : <div className="plan-connecting" aria-hidden="true"><span className="plan-connecting-mark" />Preparing your route…</div>)}
     {snapshot?.preview_trip && !snapshot.itinerary && !terminal(snapshot) && <JourneyPreview trip={snapshot.preview_trip}><PlanningProgress snapshot={snapshot} city={snapshot.preview_trip.fixture.city} origin={origin} variant="preview" /></JourneyPreview>}
     {completing && <PlanningProgress snapshot={snapshot} city={city} origin={origin} variant="hero" forceDone />}
-    {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. <Link href="/">Try another trip brief <span className="arrow">→</span></Link></p>}
+    {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. {snapshot?.email_status === "not_requested" && "No email was sent. "}<Link href="/">Try another trip brief <span className="arrow">→</span></Link></p>}
     {snapshot?.itinerary && !completing && <div className="plan-reveal"><ItineraryView itinerary={snapshot.itinerary} /></div>}
     {snapshot?.itinerary && !completing && !terminal(snapshot) && <div className="send-bar"><div><strong>Take the plan with you.</strong><small>We’ll email this saved version. Prices aren’t checked again.</small></div><button className="primary" disabled={closed} onClick={() => void finalize()}>{closed ? "Preparing your email…" : <>Send me my itinerary <span className="arrow">→</span></>}</button></div>}
     {snapshot?.itinerary && terminal(snapshot) && <p className="fine">This planning session has ended. <Link href="/">Start a new trip brief <span className="arrow">→</span></Link></p>}

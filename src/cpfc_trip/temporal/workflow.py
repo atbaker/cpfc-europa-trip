@@ -544,6 +544,14 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             command, self.pending = self.pending, None
             await self.bounded_turn(command)
         self.finalize_requested = True
+        if self.state.itinerary is None and workflow.patched("no-email-without-itinerary"):
+            self.change(
+                phase="failed",
+                active_turn_id=None,
+                progress_message="No complete trip was found. No email was sent.",
+            )
+            await workflow.wait_condition(workflow.all_handlers_finished)
+            return self.state
         self.change(
             phase="finalizing",
             active_turn_id=None,

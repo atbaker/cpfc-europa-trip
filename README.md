@@ -196,6 +196,8 @@ The frozen itinerary is persisted and rendered without another research pass. Th
 freezes the sender/content/idempotency key before sending; ambiguous sends are never retried
 under a new identity after the safe retry window. Existing real delivery was validated in
 September; a fresh engineer should use previews unless an actual send has been authorized.
+If the search cannot commit an itinerary, the session ends with an on-page explanation and no
+email or delivery record. A Temporal patch keeps older failure-notice histories replayable.
 After the email provider accepts a send, the app erases its local encrypted recipient address
 and address hash in the same transaction as the provider receipt. An ambiguous send retains the
 address until it can be retried or reconciled; the provider may separately retain delivery data.

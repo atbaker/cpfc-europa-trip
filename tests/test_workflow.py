@@ -97,7 +97,7 @@ async def test_automatic_finalization(environment, session_input, reason):
     assert result.finalization_reason == reason and len(emails) == 1
 
 
-async def test_no_draft_sends_failure_notice(environment, session_input):
+async def test_no_draft_finishes_without_email(environment, session_input):
     emails = []
 
     @activity.defn(name="deliver_itinerary")
@@ -110,10 +110,18 @@ async def test_no_draft_sends_failure_notice(environment, session_input):
     async with Worker(
         environment.client, task_queue=queue, workflows=[Workflow], activities=[deliver]
     ):
-        result = await environment.client.execute_workflow(
+        handle = await environment.client.start_workflow(
             Workflow.run, value, id=str(uuid4()), task_queue=queue
         )
-    assert result.phase == "failed" and result.email_kind == "failure_notice" and len(emails) == 1
+        result = await handle.result()
+    assert result.phase == "failed"
+    assert result.itinerary is None
+    assert result.email_kind is None
+    assert result.email_status == "not_requested"
+    assert result.email_provider_id is None
+    assert emails == []
+    history = await handle.fetch_history()
+    await Replayer(workflows=[Workflow], plugins=[PydanticAIPlugin()]).replay_workflow(history)
 
 
 @pytest.mark.parametrize(
@@ -160,8 +168,11 @@ async def test_no_nonstop_flights_explains_failed_city_search(
     async def stays(spec: SearchSpec) -> SearchBatch:
         return sample(spec, "stay")
 
+    emails = []
+
     @activity.defn(name="deliver_itinerary")
     async def deliver(state: Snapshot) -> str:
+        emails.append(state)
         return "test-email"
 
     fixtures, catalog_routes = load_catalog()
@@ -188,10 +199,12 @@ async def test_no_nonstop_flights_explains_failed_city_search(
         workflows=[Workflow],
         activities=[flights, stays, deliver],
     ):
-        result = await environment.client.execute_workflow(
+        handle = await environment.client.start_workflow(
             Workflow.run, value, id=str(uuid4()), task_queue=queue
         )
-    assert result.phase == "failed" and result.email_kind == "failure_notice"
+        result = await handle.result()
+    assert result.phase == "failed" and result.email_kind is None
+    assert result.email_status == "not_requested" and emails == []
     if mixed_failure:
         assert "No nonstop or suitable one-stop flights" not in result.transcript_tail[-1].content
         assert "couldn't find a complete trip" in result.transcript_tail[-1].content

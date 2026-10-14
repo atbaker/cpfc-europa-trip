@@ -1,8 +1,9 @@
 # Eagles Away — MVP plan
 
 - Status: approved rebuild plan; SearchApi selected for flight, hotel, and train results
+- Email behavior update: 14 October 2026; when no itinerary can be committed, end the session with an on-page explanation and do not send an email. Successful itinerary emails are unchanged. A Temporal patch preserves replay of older histories that scheduled a failure notice; the snapshot schema keeps `failure_notice` only for those sessions. This supersedes the older failure-notice requirements below.
 - Departure scope update: 8 October 2026; keep one fixed dropdown for all matches with Belfast, Birmingham, Bristol, Edinburgh, Glasgow, Liverpool, London, Manchester and Newcastle. Their supported airports each handled at least five million passengers in the UK CAA's [April 2024–March 2025 airport table](https://www.caa.co.uk/Documents/Download/23997/f0ce4b8e-b2f8-4552-b794-4f36fd4afe9a/17096). The cutoff is a practical international-connectivity proxy, not proof of a viable dated route to each fixture. The app searches nonstop and suitable one-stop flights, still subject to provider results and feasibility rules. New live submissions from other cities are rejected; existing sessions retain their recorded origins. This supersedes the broader 5 October departure update below.
-- Email copy update: 8 October 2026; successful itinerary emails render the saved plan's caveats once in both HTML and plain text. The email template no longer adds a second price/ticket/departure-hub disclaimer. Failed-search notices retain their separate no-booking explanation.
+- Email copy update: 8 October 2026; successful itinerary emails render the saved plan's caveats once in both HTML and plain text. The email template no longer adds a second price/ticket/departure-hub disclaimer. Failed-search notices then retained a separate no-booking explanation; the 14 October decision above ends new failure notices.
 - Form catalog update: 8 October 2026; the static home page includes the reviewed live fixtures and UK city/rail choices at build time so the form can render before `/api/catalog` responds. A generated JSON snapshot comes from the backend catalog and origins, with a check that fails if it is stale. The runtime catalog request still updates availability and development-mode behavior, while preserving a valid visitor selection. Past fixtures are removed after hydration and the API remains authoritative at submission.
 - Plan-page update: 8 October 2026; remove the user-facing follow-up conversation because it has not produced useful revisions in preview testing. The brief, progress, saved itinerary and email action remain. Existing backend message handling and stored transcripts remain for compatibility with already-running sessions; the website no longer sends new messages. This supersedes the earlier follow-up UI scope below.
 - Deployment update: 7 October 2026; the owner changed the first hosting target from GCP to DigitalOcean because GCP billing access remains blocked. The private preview will use App Platform in Frankfurt with a web service, continuously running Temporal Cloud worker, PostgreSQL and a migration job. The generated DigitalOcean URL will require preview access credentials; `eaglesaway.com` DNS stays unchanged until the hosted application is verified. DigitalOcean CLI access and a non-local Gemini credential are open prerequisites. The older GCP infrastructure sections below are historical design, not the current preview target.
@@ -25,7 +26,7 @@
 
 ## Recommendation in one page
 
-Build a mobile-first, public travel-planning service for Palace supporters departing from London. A supporter completes a short form, a bounded durable planning session compares live travel results within a small fixture-specific route catalog, and the UI renders a structured draft itinerary. The supporter can ask follow-up questions or request changes in a short chat. Send the latest committed itinerary unchanged when requested or after ten minutes of meaningful inactivity. Session limits also finalize the latest valid result; if planning cannot produce one within its deadline, send one honest failure notice.
+Build a mobile-first, public travel-planning service for Palace supporters departing from London. A supporter completes a short form, a bounded durable planning session compares live travel results within a small fixture-specific route catalog, and the UI renders a structured draft itinerary. The supporter can ask follow-up questions or request changes in a short chat. Send the latest committed itinerary unchanged when requested or after ten minutes of meaningful inactivity. Session limits also finalize the latest valid result; if planning cannot produce one within its deadline, finish with an on-page explanation and no email.
 
 The MVP should make seven deliberate choices:
 
@@ -50,7 +51,7 @@ The SearchApi feasibility spike is successful under the agreed external-search h
 | Travel data | SearchApi: `google_flights`, `booking` / `booking_property`, and Google Search `train_results`; replaceable adapters |
 | Provider spike | Successful for initial provider selection; wider coverage, price handling, and failure cases belong to integration/readiness work |
 | Launch target | Public self-serve travel planning with automated research and clearly labeled coverage gaps |
-| Email | Send the latest committed itinerary unchanged, with existing prices/timestamps and direct links; one failure notice if no valid result can be produced; no pre-email research pass |
+| Email | Send the latest committed itinerary unchanged, with existing prices/timestamps and direct links; send nothing if no valid result can be produced; no pre-email research pass |
 | Timeout | Ten minutes of meaningful inactivity; three-minute initial planning deadline; 90-second follow-up deadline; 30-minute interaction window and at most ten follow-ups |
 | Budget | Relative `£ / ££ / £££` preference with plain-language descriptions, not a hard spending cap |
 | Branding | Make Temporal sponsorship clear in the page chrome and email |
@@ -211,7 +212,7 @@ refresh-on-click endpoint. Private itinerary access links remain separately auth
 
 Show the remaining follow-up allowance as it becomes relevant. At the interaction/turn limit,
 finalize the latest completed plan. If initial planning fails or times out without a valid
-result, send a single concise failure notice instead of waiting indefinitely or inventing a trip.
+result, show a concise failure on the page without sending an email or inventing a trip.
 
 ## Making the budget choice genuinely useful
 
@@ -409,7 +410,7 @@ State transitions:
 
 `CREATED → RESEARCHING → DRAFT_READY ↔ REVISING → FINALIZING → EMAILED`
 
-A partial provider failure should produce a clearly labeled partial draft when enough evidence remains. If no valid itinerary can be produced by the initial deadline, send one failure notice and finish in `FAILED`; its `email_status` still records whether that notice was sent. `EMAIL_FAILED` means the final plan/notice could not be submitted successfully within the send policy. Research uses SearchApi and the catalog; explicit missing-evidence fallbacks never wait for another acquisition path.
+A partial provider failure should produce a clearly labeled partial draft when enough evidence remains. If no valid itinerary can be produced by the initial deadline, finish in `FAILED` with `email_status=not_requested` and no delivery Activity. `EMAIL_FAILED` means a valid plan could not be submitted successfully within the send policy. Research uses SearchApi and the catalog; explicit missing-evidence fallbacks never wait for another acquisition path.
 
 The authoritative Workflow state contains:
 
@@ -446,8 +447,8 @@ The initial POST supplies a client-generated submission ID, so a double-tap or m
 7. Post-validate and retry only failed portions while the initial deadline and request budget permit.
 8. Commit the validated itinerary and completed assistant message atomically, then set `DRAFT_READY`.
 
-If the initial attempt cannot produce any valid itinerary by its deadline, finalize a failure
-notice. A partial plan must name the missing fixtures/legs and cannot label unevidenced travel
+If the initial attempt cannot produce any valid itinerary by its deadline, show the failure
+on the page without email. A partial plan must name the missing fixtures/legs and cannot label unevidenced travel
 as feasible. Use one Workflow for the selected fixtures, with capped parallel Activities.
 
 ### Bounded sessions and work budgets
@@ -485,7 +486,7 @@ The 30-minute limit bounds interactive planning, not durable email retries. Do n
 a Workflow execution timeout that can kill finalization. Keep the Workflow alive through the
 bounded send/reconciliation policy even after input and planning have closed.
 
-### Inactivity timer and exactly-one email
+### Inactivity timer and at-most-one itinerary email
 
 Use Temporal's [Updatable Timer pattern](https://docs.temporal.io/design-patterns/updatable-timer)
 with deterministic Workflow time. Submission and newly accepted messages count as interaction;
@@ -493,10 +494,10 @@ polling, page focus, reading, and duplicate requests do not.
 
 - Manual send and inactivity close input and stop accepting new turns. If a turn was already accepted, resolve it within its existing deadline, then freeze the latest committed revision.
 - The fixed interaction deadline takes precedence: cancel unfinished planning and use the latest valid committed plan. At the turn/session-request limit, finalize after resolving the last permitted turn within its deadline.
-- Initial planning failure/deadline with no valid draft produces one failure notice. Do not wait indefinitely for a draft or claim that empty results prove no travel is possible.
-- All paths enter the same `FINALIZING` transition once and store a finalization reason, frozen itinerary revision (if present), and email kind (`itinerary` or `failure_notice`). Later finalize requests are no-ops.
+- Initial planning failure/deadline with no valid draft ends in `FAILED` without email. Do not wait indefinitely for a draft or claim that empty results prove no travel is possible.
+- Successful planning enters `FINALIZING` once and stores a finalization reason, frozen itinerary revision, and itinerary email kind. Failed planning stores the reason but leaves email status `not_requested`. Later finalize requests are no-ops.
 - Render the frozen result and original price timestamps. Finalization must call no travel/search/model tools and must not alter itinerary selections.
-- Send through an idempotent Activity using a stable session-level key and a unique email-delivery record. Successful itinerary mail ends in `EMAILED`; a sent failure notice ends in `FAILED`; exhausted/ambiguous send handling uses `EMAIL_FAILED` and never authorizes a second message.
+- Send a valid itinerary through an idempotent Activity using a stable session-level key and a unique email-delivery record. Successful itinerary mail ends in `EMAILED`; no-result planning ends in `FAILED` without calling that Activity. Exhausted/ambiguous send handling uses `EMAIL_FAILED` and never authorizes a second message.
 
 Use Resend's [`Idempotency-Key`](https://resend.com/docs/dashboard/emails/idempotency-keys),
 for example `final-itinerary/{session_id}`. Keep the frozen email payload unchanged across
@@ -869,6 +870,8 @@ class SessionSnapshot(BaseModel):
 ```
 
 API models and persisted Workflow models should evolve additively: new fields get defaults; incompatible schema changes require versioning/replay planning.
+`failure_notice` remains in the snapshot type only for replay and display of sessions created
+before the 14 October 2026 no-email decision; new no-result sessions leave `email_kind` unset.
 
 Command timestamps used for inactivity are recorded with deterministic Workflow time when an Update is accepted; the server does not trust a client-supplied timestamp for the deadline.
 
@@ -1095,7 +1098,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Complete flight token selection, Google Flights handoff, dated/occupied hotel links, and rail date/party/currency validation. Unknown group fares remain unknown. Contract tests cover known spike discrepancies and empty/error responses.
 - Pydantic AI durable run inside the session Workflow.
 - Statically exported Next.js `/` and `/plan/` routes, typed React form/cards/chat, generated API client, curated progress, completed answers, atomic cards, and direct Temporal snapshot polling with revision-aware reconciliation and error recovery.
-- Bounded follow-up revision, direct mobile reload, manual/inactivity/limit email, no-result failure notice, Temporal time-skipping, and Resend idempotency tests.
+- Bounded follow-up revision, direct mobile reload, manual/inactivity/limit itinerary email, no-result no-email behavior, Temporal time-skipping, and Resend idempotency tests.
 
 **Exit:** the SearchApi adapters produce typed flight/hotel/train evidence and accepted external handoffs for the vertical slice, with missing prices explicitly represented. Terminate the Worker during a model Activity and restart the API/browser; polling recovers, the UI retains its last valid state, and the session commits one valid response/itinerary and sends one email.
 
@@ -1105,7 +1108,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Test direct-link longevity, price drift, tax/baggage treatment, missing train widgets, and SearchApi degradation. Verify critical transfer guidance in the catalog; do not rely on the unproven Maps Directions timing behavior.
 - Complete the small catalog/date enumeration, feasibility checks, and budget ranking for the enabled patterns.
 - Complete Q&A responses and curated progress for every applicable turn; typed itinerary revisions remain atomic.
-- Transactional itinerary/failure email templates, direct outbound links, privacy/brand/accessibility copy, and branded static assets.
+- Transactional itinerary email template, direct outbound links, privacy/brand/accessibility copy, and branded static assets.
 - Enforced mobile Web Vitals, accessibility, and bundle budgets on the production export.
 - Curated deterministic scenario set, developer-reviewed example outputs, and ordinary Logfire traces; no automated LLM judges.
 
@@ -1119,7 +1122,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Confirm SearchApi commercial display/cache/email/link permissions and adequate automated coverage for the public self-serve target. If readiness falls short, restrict unsupported features/routes before launch.
 - Dashboards, alerts, source kill switches, polling timeout/backoff behavior, and degraded-mode copy.
 
-**Exit:** production canaries prove the minimum Worker capacity and scale-out, each enabled source/fallback transition, kill switches, polling recovery, itinerary generation, frontend rollback, and exactly-one email.
+**Exit:** production canaries prove the minimum Worker capacity and scale-out, each enabled source/fallback transition, kill switches, polling recovery, itinerary generation, frontend rollback, and at-most-one itinerary email.
 
 ### Milestone 4 — post-launch expansion
 
@@ -1152,7 +1155,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - The browser polls about every two seconds while work is pending, slows while awaiting input, pauses in hidden tabs, and stops at terminal states. It handles unchanged responses and temporary Query failures, ignores older revisions, and converges to canonical state without a separate live PostgreSQL projection.
 - No chain-of-thought, reasoning parts, tool arguments, raw provider payloads, or unrelated PII appear in public snapshots.
 - Manual send, meaningful inactivity, or session limits freeze and email the latest committed plan once, even if the user closes the page. Finalization makes no model/provider calls, changes no itinerary selections or price timestamps, and uses direct outbound links.
-- Initial planning has a bounded outcome: a valid/partial plan or one honest failure notice. A failed/timed-out follow-up cannot replace the last valid plan. The interaction limit does not terminate durable email retries.
+- Initial planning has a bounded outcome: a valid/partial plan or an on-page failure with no email. A failed/timed-out follow-up cannot replace the last valid plan. The interaction limit does not terminate durable email retries for valid plans.
 - The maximum permitted session stays within tested payload/History budgets without summarization or history rollover. Developer-reviewed examples and deterministic checks cover all enabled destinations and budget styles.
 - Worker termination and API restart do not lose the session.
 - A direct `/plan/?session=…` reload restores the Workflow-backed snapshot using a non-secret identifier plus the authorized cookie/link credential.
@@ -1173,7 +1176,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 6. **Booking handoff:** link directly to Google Flights with explicit UK market/British-English/GBP parameters, dated/occupied Booking.com property pages, and train seller pages. Use contextual searches when a specific link is unsuitable for retention. No app redirect service, outbound token lifecycle, click audit, refresh-on-click, or checkout automation.
 7. **Price storage:** retain one ordinary normalized price-snapshot model with the itinerary in Temporal and PostgreSQL projections. Include amount, currency, source/time, scope/party, taxes, and baggage context. Freshness controls labels; user-requested revisions can refresh observations. Email never reprices or deletes a saved price. No separate quote cache, expiring handles, or field-level storage-policy machinery is required for SearchApi.
 8. **Infrastructure:** use Terraform from the start, including the Cloud Storage/Cloud CDN frontend path, shared HTTPS load balancer, Cloud Run, Cloud SQL, IAM, and Serverless Worker prerequisites. Default regional resources to GCP `europe-west3` and colocate Temporal Cloud in `gcp-europe-west3`. Release objects are published separately from Terraform state.
-9. **Email:** freeze and send the latest committed revision unchanged, preserving price timestamps and caveats. Initial failure produces one failure notice. Use a single session-level idempotency key and durable delivery record.
+9. **Email:** freeze and send the latest committed revision unchanged, preserving price timestamps and caveats. Initial failure sends no email. Use a single session-level idempotency key and durable delivery record for valid plans.
 10. **Route scope:** plan from London hubs using a minimal catalog tied to the four Palace fixtures. Defer nationwide origins, arbitrary gateway discovery, and coach/ferry search.
 11. **Conversation scope:** start with ten follow-ups, a 30-minute interaction window, three minutes for initial planning, and 90 seconds per follow-up, plus explicit call budgets. Defer summarization and Continue-As-New; verify bounded History/payload growth.
 12. **Evaluation:** deterministic checks, provider contracts, a small curated scenario set, developer quality review, and Logfire traces. Defer automated LLM judges and trajectory-scoring machinery.
