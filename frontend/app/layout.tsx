@@ -10,10 +10,8 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
   return <html lang="en-GB"><body className={inter.variable}>
     <header className="masthead">
       <Link href="/" className="wordmark"><span className="ea-mark" aria-hidden="true">EA</span><span>EAGLES <b>AWAY</b></span></Link>
-      <div className="header-partners">
-        <span className="sponsor">Powered by <Image className="sponsor-logo" src="/temporal-logo.webp" alt="Temporal" width={105} height={31} priority /></span>
-        <span className="club-credit"><span>Built for<br />Crystal Palace</span><Image className="club-crest" src="/cpfc-crest.svg" alt="Crystal Palace F.C. crest" width={98} height={122} priority /></span>
-      </div>
+      <span className="club-credit"><span>Built for</span><Image className="club-crest" src="/cpfc-crest.svg" alt="Crystal Palace F.C. crest" width={98} height={122} priority /></span>
+      <span className="sponsor">Powered by <Image className="sponsor-logo" src="/temporal-logo.webp" alt="Temporal" width={105} height={31} priority /></span>
     </header>
     <main>{children}</main>
     <footer><span>Your club. Your next away day.</span><Link href="/privacy/">Privacy & your data</Link><span>Travel planning only · Match tickets not included</span><AnalyticsConsent /></footer>
