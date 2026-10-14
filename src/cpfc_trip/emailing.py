@@ -7,13 +7,13 @@ from zoneinfo import ZoneInfo
 from cpfc_trip.domain import Leg, Money, Quote, Snapshot, Stay, Trip
 from cpfc_trip.planner.links import safe_url
 
-INK = "#17253d"
-MUTED = "#526176"
-PAPER = "#f7f5f0"
-RED = "#bf1934"
-BLUE = "#20509a"
-LINE = "#d9dfe7"
-SOFT_BLUE = "#edf3fa"
+INK = "#000000"
+MUTED = "#454545"
+PAPER = "#ffffff"
+RED = "#ee2e24"
+BLUE = "#0055a5"
+LINE = "#e4e4e4"
+SOFT_BLUE = "#edf4fa"
 CPFC_TICKET_URL = (
     "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&"
     "preFilterName=3.+Away+Matches+%2526+Coach+Travel&"
@@ -155,13 +155,13 @@ def _match(trip: Trip) -> str:
     fixture = trip.fixture
     kickoff = fixture.kickoff_at.astimezone(ZoneInfo(fixture.timezone))
     return _card(
-        '<p style="margin:0 0 10px;color:#e4edfb;font-size:12px;font-weight:700;'
+        '<p style="margin:0 0 10px;color:#ffffff;font-size:12px;font-weight:700;'
         'letter-spacing:1.4px">MATCHDAY</p>'
         '<h3 style="margin:0 0 9px;color:#ffffff;font-size:21px;line-height:1.2">'
         f"{escape(fixture.opponent)} v Crystal Palace</h3>"
         f'<p style="margin:0 0 10px;color:#ffffff;font-size:14px">'
         f"{escape(kickoff.strftime('%A %d %B %Y, %H:%M'))} local</p>"
-        f'<p style="margin:0;color:#e4edfb;font-size:13px;line-height:1.5">'
+        f'<p style="margin:0;color:#ffffff;font-size:13px;line-height:1.5">'
         f"{escape(fixture.venue)} · {escape(fixture.venue_status)} venue · "
         "Match ticket not included</p>"
         '<p style="margin:12px 0 0">'
@@ -226,7 +226,7 @@ def _trip(trip: Trip) -> str:
         cards += (
             f'<div style="margin:0 0 16px;padding:16px;border-left:4px solid {BLUE};'
             f'background:{SOFT_BLUE}"><strong style="color:{INK}">Before you book</strong>'
-            '<ul style="margin:10px 0 0;padding-left:20px;color:#17253d;font-size:14px;'
+            f'<ul style="margin:10px 0 0;padding-left:20px;color:{INK};font-size:14px;'
             'line-height:1.5">'
             + "".join(f"<li>{escape(gap)}</li>" for gap in trip.gaps)
             + "</ul></div>"

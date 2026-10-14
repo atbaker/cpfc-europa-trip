@@ -11,6 +11,13 @@ The Next.js frontend polls authenticated Temporal snapshots through FastAPI. Use
 frozen itinerary with direct travel links; the app does not book travel or sell match tickets.
 The domain is **eaglesaway.com**; the verified transactional sender uses **notifications.eaglesaway.com**.
 
+## Visual identity
+
+The interface uses the Crystal Palace brand book's red (`#ee2e24`), blue (`#0055a5`),
+black, white, grey and yellow focus colour. The header displays the full-colour club crest
+below the Temporal credit; its SVG comes from the [official club shop](https://shop.cpfc.co.uk/).
+The current site fonts remain in place until the club supplies licensed Palace font files.
+
 ## Private cloud preview
 
 The DigitalOcean app runs at

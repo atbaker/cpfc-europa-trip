@@ -225,7 +225,8 @@ def test_email_matches_plan_card_structure(session_input: SessionInput) -> None:
     assert "MATCHDAY" in html
     assert "OUTBOUND" in html and "RETURN" in html
     assert "STAY" in html and "Before you book" in html
-    assert "#bf1934" in html and "#20509a" in html
+    assert "#ee2e24" in html and "#0055a5" in html
+    assert "#bf1934" not in html and "#20509a" not in html
     assert "Known subtotal" in html
     assert "Price source:" in html
     ticket_url = (
