@@ -199,3 +199,8 @@
 
 - Added the owner-supplied CPFC away-match ticket listing to the match-selection form, the shared match card in both preview and completed plans, and the HTML/plain-text itinerary email. Tickets remain excluded from plan prices. The frontend shares one URL constant; the email uses the existing escaped-link helper after allowing the official ticket host.
 - The supplied eTicketing page could not be opened by the web inspection tool, so its current inventory and member eligibility were not verified. Tests assert the exact destination and accessible link label. `scripts/check.sh` passed with 102 Python tests, two PostgreSQL fixture skips, 27 frontend tests, Ruff, mypy, generated schema comparison, TypeScript, ESLint and static build. No ticket purchase or test email was performed.
+
+## 14 October 2026 — opt-in Logfire diagnostics
+
+- Added `LOGFIRE_ENABLED` and server-side `LOGFIRE_TOKEN` settings. With telemetry enabled, the API records only fixed route labels, status codes and elapsed time; it does not instrument request bodies or raw URLs. The worker enables Pydantic AI spans with prompt, response and tool content excluded. Broader HTTP and Temporal payload instrumentation is deferred because it can expose personal or credential data.
+- Updated the privacy notice, environment example and operator documentation to describe the diagnostic data. Tests cover the disabled default, missing-token rejection, content exclusion and session-ID-free route labels. `scripts/check.sh` passed with 105 Python tests, two PostgreSQL fixture skips, 27 frontend tests, Ruff, mypy, generated schema comparison, TypeScript, ESLint and static build. No live Logfire event, paid search or email has yet been verified in this change.

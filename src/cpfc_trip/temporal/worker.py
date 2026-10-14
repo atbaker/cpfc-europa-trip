@@ -11,6 +11,7 @@ from cpfc_trip.persistence.database import engine
 from cpfc_trip.persistence.repository import Repository
 from cpfc_trip.persistence.search_cache import SearchCache
 from cpfc_trip.planner.agent import configure_model, model
+from cpfc_trip.telemetry import configure_telemetry
 from cpfc_trip.temporal.activities import DeliveryActivities, SearchActivities
 from cpfc_trip.temporal.client import connect
 from cpfc_trip.temporal.workflow import TravelPlanningSessionWorkflow
@@ -18,6 +19,7 @@ from cpfc_trip.temporal.workflow import TravelPlanningSessionWorkflow
 
 async def run() -> None:
     settings = Settings()
+    configure_telemetry(settings, "worker")
     if settings.planner_mode == "live":
         await configure_model(settings)
     db = engine(settings)

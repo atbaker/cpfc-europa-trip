@@ -24,6 +24,13 @@ export default function Privacy() {
         database after 30 days. This period also applies to our email webhook records. Travel prices
         and availability can change; check the provider before booking.
       </p>
+      <h2>Operational diagnostics</h2>
+      <p>
+        We use Pydantic Logfire for operational diagnostics. It records request timing, fixed
+        route labels, status codes and model timing. We exclude request bodies, email addresses,
+        session IDs, and model prompt and response content from these events. This does not set
+        browser analytics cookies.
+      </p>
       <h2>Optional analytics</h2>
       <p>
         If you allow analytics, Google Analytics measures page views and whether the planning steps

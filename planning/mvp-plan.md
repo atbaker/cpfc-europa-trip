@@ -943,6 +943,12 @@ Do not invent the exact retention period here. Choose it with Temporal Cloud His
 
 Use `LogfirePlugin()` so Temporal Workflow/Activity telemetry and Pydantic AI model/tool spans form one trace. Instrument FastAPI and provider HTTP clients, but configure scrubbing before sending production traffic. Trace IDs should correlate session, Workflow, provider calls, and email without using email as an attribute. Measure Query latency, errors, unchanged-response rate, worker replay/cache behavior, and time from turn commit to browser display; omit transcript/snapshot bodies from polling telemetry.
 
+The first deployed Logfire integration is deliberately narrower: opt-in API request timing
+with fixed route labels and status codes, plus Pydantic AI spans with content disabled.
+It does not instrument raw HTTP requests or Temporal payloads, since those can include
+session IDs, email addresses, trip details, or provider credentials. Broader tracing
+requires a separate privacy review and explicit redaction tests.
+
 ### Deterministic checks and curated examples
 
 Start with approximately 20–30 code-owned scenarios, using recorded/synthetic provider responses

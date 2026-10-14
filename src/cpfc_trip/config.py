@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr = SecretStr("")
     resend_from_email: str = ""
     resend_webhook_secret: SecretStr = SecretStr("")
+    logfire_enabled: bool = False
+    logfire_token: SecretStr = SecretStr("")
     inactivity_timeout_seconds: int = 600
     cloud_sql_instance: str = ""
     database_user: str = ""
@@ -42,6 +44,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def production(self) -> Self:
+        if self.logfire_enabled and not self.logfire_token.get_secret_value():
+            raise ValueError("Logfire token is required when telemetry is enabled")
         if self.google_auth_mode == "api_key" and not self.gemini_api_key.get_secret_value():
             raise ValueError("Gemini API key is required for api_key authentication")
         if (
