@@ -114,7 +114,7 @@ export function PlannerForm() {
       private_room: form.get("private_room") === "on",
       private_bathroom: form.get("private_bathroom") === "on",
       transport_mode: railAvailable ? transport : "flight",
-      extra_instructions: String(form.get("instructions") ?? ""),
+      extra_instructions: "",
     };
     const content = JSON.stringify({ email: form.get("email"), brief });
     if (!attempt.current || attempt.current.body !== content) {
@@ -174,7 +174,6 @@ export function PlannerForm() {
         <p className="form-help">We’ll show your trip here first. You can change it before taking it with you.</p>
         <label>Email address<input name="email" type="email" autoComplete="email" required={step === 2} placeholder="you@example.com" /></label>
         <p className="fine">We’ll use this address to send this itinerary once. No account and no marketing. <Link href="/privacy/">How we use your data</Link>.</p>
-        <label>Anything else? <span className="muted">Optional</span><textarea name="instructions" maxLength={2000} rows={3} placeholder="Gatwick preferred, step-free stations, no shared rooms…" /></label>
         <div className="form-review"><strong>Before you start</strong><p>{origin === "London" ? railAvailable ? "We’ll search flights from Heathrow, Gatwick, Stansted or Luton, plus supported St Pancras routes." : "We’ll search flights from Heathrow, Gatwick, Stansted or Luton." : railAvailable ? `We’ll search flights from ${origin} and dated trains through London and Paris. Allow time to change stations in both cities.` : `We’ll search flights from the supported airport near ${origin}.`} We check nonstop flights first, then suitable one-stop flights if needed.{selectedFixture?.city === "Białystok" ? " For Białystok, we’ll check a train from Warsaw and leave time for the airport transfer. Train fares may be unavailable." : ""} Routes and prices depend on what the provider can verify. Your journey to the departure point and match tickets are outside this plan.</p></div>
         <div className="form-actions"><button type="button" className="text-button" onClick={() => moveTo(1)}><span className="arrow">←</span> Back</button><button className="primary" disabled={!selected || busy}>{busy ? "Starting your session…" : <>Plan my away day <span className="arrow">→</span></>}</button></div>
       </section>

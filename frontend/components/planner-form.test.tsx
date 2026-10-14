@@ -95,12 +95,13 @@ describe("trip brief steps", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continue to travel preferences/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Travel by" }), { target: { value: "rail" } });
     fireEvent.click(screen.getByRole("button", { name: /Continue to your details/ }));
+    expect(screen.queryByRole("textbox", { name: /Anything else/ })).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Email address" }), { target: { value: "supporter@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /Plan my away day/ }));
     await waitFor(() => expect(vi.mocked(request).mock.calls.some(([path]) => path === "/api/sessions")).toBe(true));
     const submission = vi.mocked(request).mock.calls.find(([path]) => path === "/api/sessions");
     const body = JSON.parse(String(submission?.[1]?.body));
-    expect(body.brief).toMatchObject({ origin_city: "Manchester", transport_mode: "rail" });
+    expect(body.brief).toMatchObject({ origin_city: "Manchester", transport_mode: "rail", extra_instructions: "" });
   });
 
   it("offers one match at a time and submits only the current choice", async () => {
