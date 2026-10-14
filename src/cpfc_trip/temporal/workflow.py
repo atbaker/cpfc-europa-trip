@@ -388,6 +388,36 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                     )
                 ):
                     break
+            if (
+                not any(t.journey and t.stay for t in trips)
+                and workflow.patched("airport-preference-fallback")
+                and intent.preferred_airports
+            ):
+                # SearchApi already searched the city's airport set. Recheck the
+                # retrieved evidence without this one constraint before spending
+                # another paid request or claiming the route is unavailable.
+                relaxed = intent.model_copy(update={"preferred_airports": ()})
+                fallback_trips = tuple(
+                    choose(f, batches[f.id], effective, self.data.routes, relaxed)
+                    for f in self.data.fixtures
+                )
+                if any(trip.journey and trip.stay for trip in fallback_trips):
+                    preferred = ", ".join(intent.preferred_airports)
+                    trips = tuple(
+                        trip.model_copy(
+                            update={
+                                "summary": (
+                                    f"We couldn't accommodate your {preferred} airport preference "
+                                    "in the complete trips we checked. This option departs from "
+                                    f"{trip.journey.outbound[0].origin} and returns to "
+                                    f"{trip.journey.inbound[-1].destination}. {trip.summary}"
+                                )
+                            }
+                        )
+                        if trip.journey and trip.stay
+                        else trip
+                        for trip in fallback_trips
+                    )
             if not any(t.journey and t.stay for t in trips):
                 if (
                     specs
@@ -419,7 +449,36 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                         f"No nonstop or suitable one-stop flights were found from {self.brief.origin_city} to "
                         f"{destination} on the dates searched.{connection} " + alternatives
                     )
-                raise ValueError("No valid draft")
+                if any(batch.journeys for results in batches.values() for batch in results):
+                    relaxed = intent.model_copy(update={"preferred_airports": ()})
+                    if any(
+                        feasible_journey(journey, fixture, effective, relaxed, route)
+                        for fixture in self.data.fixtures
+                        for batch in batches[fixture.id]
+                        for journey in batch.journeys
+                        for route in self.data.routes
+                        if route.id == journey.route_id
+                    ):
+                        raise NoCompleteTrip(
+                            "We found a dated return journey, but couldn't verify a stay "
+                            "that fits its dates and room requirements. Try different travel "
+                            "dates or room preferences."
+                        )
+                    raise NoCompleteTrip(
+                        "We found return journeys, but none passed the requested date, "
+                        "match timing and connection checks. Try different travel dates "
+                        "or another starting city."
+                    )
+                if specs:
+                    raise NoCompleteTrip(
+                        "We couldn't find a complete trip within the search limits because "
+                        "no dated return journey was verified in the results checked. Try "
+                        "different travel dates, another starting city or another travel mode."
+                    )
+                raise NoCompleteTrip(
+                    "No supported travel route was available for this match, city and "
+                    "travel mode. Try another starting city or travel mode."
+                )
             new_itinerary = Itinerary(
                 revision=(self.state.itinerary.revision + 1) if self.state.itinerary else 1,
                 generated_at=workflow.now(),

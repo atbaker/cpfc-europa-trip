@@ -218,6 +218,165 @@ async def test_no_nonstop_flights_explains_failed_city_search(
         assert "train to Białystok" in result.transcript_tail[-1].content
 
 
+@pytest.mark.parametrize("available_airport", ["LHR", "LGW"])
+async def test_airport_preference_uses_verified_fallback_only_when_needed(
+    environment, session_input, monkeypatch, available_airport
+):
+    import json
+
+    from google.genai.types import GenerateContentResponse
+
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.agent import model
+    from cpfc_trip.planner.recorded import sample
+
+    async def fake_model(**kwargs):
+        return GenerateContentResponse.model_validate(
+            {
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {
+                            "role": "model",
+                            "parts": [
+                                {
+                                    "text": json.dumps(
+                                        {
+                                            "action": "revise",
+                                            "answer": "",
+                                            "preferred_airports": ["LGW"],
+                                        }
+                                    )
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(model.client.aio.models, "generate_content", fake_model)
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        batch = sample(spec, "flight")
+        journey = batch.journeys[0]
+        outbound = journey.outbound[0].model_copy(update={"origin": available_airport})
+        inbound = journey.inbound[0].model_copy(update={"destination": available_airport})
+        return SearchBatch(
+            journeys=(journey.model_copy(update={"outbound": (outbound,), "inbound": (inbound,)}),)
+        )
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "brief": session_input.brief.model_copy(
+                update={"extra_instructions": "Gatwick only, please."}
+            ),
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        state = await ready(handle)
+        assert state.itinerary is not None
+        trip = state.itinerary.trips[0]
+        assert trip.journey and trip.journey.outbound[0].origin == available_airport
+        if available_airport == "LHR":
+            assert "couldn't accommodate" in trip.summary
+            assert "LGW" in trip.summary and "LHR" in trip.summary
+        else:
+            assert "couldn't accommodate" not in trip.summary
+        await handle.execute_update(Workflow.request_finalize, Command(id=uuid4()))
+        await handle.result()
+    await Replayer(workflows=[Workflow], plugins=[PydanticAIPlugin()]).replay_workflow(
+        await handle.fetch_history()
+    )
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("no_stay", "couldn't verify a stay"),
+        ("late_return", "match timing and connection checks"),
+        ("no_route", "no dated return journey was verified"),
+    ],
+)
+async def test_no_complete_trip_explains_evidence_gap(environment, session_input, reason, expected):
+    from datetime import timedelta
+
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.recorded import sample
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        if reason == "no_route":
+            return SearchBatch(gaps=("Complete outbound and return flights were not available.",))
+        batch = sample(spec, "flight")
+        if reason == "late_return":
+            journey = batch.journeys[0]
+            inbound = journey.inbound[0].model_copy(
+                update={
+                    "departs_at": spec.fixture.kickoff_at,
+                    "arrives_at": spec.fixture.kickoff_at + timedelta(hours=2),
+                }
+            )
+            return SearchBatch(journeys=(journey.model_copy(update={"inbound": (inbound,)}),))
+        return batch
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return SearchBatch() if reason == "no_stay" else sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        pytest.fail("A failed search must not send an email")
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        for _ in range(100):
+            state = await handle.query(Workflow.get_snapshot)
+            if state.phase in {"draft_ready", "failed"}:
+                break
+            await asyncio.sleep(0.05)
+        else:
+            pytest.fail("Search did not finish")
+        assert state.phase == "failed", state
+        result = await handle.result()
+    assert result.phase == "failed" and result.email_status == "not_requested"
+    assert expected in result.transcript_tail[-1].content
+
+
 async def test_durable_pydantic_model_and_query_during_activity(
     environment, session_input, monkeypatch
 ):

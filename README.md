@@ -143,6 +143,11 @@ airport and, where listed, a dated rail connection. A direct service and complet
 are not guaranteed. Non-London rail includes a separate UK train and an unpriced London station
 transfer; the planner requires at least three hours before Eurostar. Its observed leg fares are
 single-person estimates, not a verified group total.
+If an airport preference in the extra instructions rules out every verified complete trip, the
+planner rechecks the travel results without that preference and labels any alternative airport
+in the plan. If no complete trip is verified, the page explains whether the checked results
+lacked a return journey, a matching stay or a journey that passed timing checks. A failed
+request does not send an email.
 
 Put secrets in the ignored root `.env`, never in frontend `NEXT_PUBLIC_*` variables.
 Configure your own team account/project rather than depending on the previous engineer's login:
