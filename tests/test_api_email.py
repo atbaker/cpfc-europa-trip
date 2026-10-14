@@ -52,7 +52,6 @@ def frozen(data):
     )
     return Snapshot(
         public_session_id=data.public_session_id,
-        email_deadline=datetime.now(UTC),
         interaction_deadline=datetime.now(UTC),
         phase="finalizing",
         email_status="pending",

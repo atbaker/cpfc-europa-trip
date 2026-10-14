@@ -62,7 +62,6 @@ async def test_postgres_concurrent_delivery_is_serialized(pg, session_input, tmp
     now = datetime.now(UTC)
     snapshot = Snapshot(
         public_session_id=data.public_session_id,
-        email_deadline=now,
         interaction_deadline=now,
         phase="finalizing",
         itinerary=Itinerary(

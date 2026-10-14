@@ -538,7 +538,7 @@ export interface components {
              * @default created
              * @enum {string}
              */
-            phase: "created" | "researching" | "draft_ready" | "revising" | "finalizing" | "emailed" | "failed" | "email_failed";
+            phase: "created" | "researching" | "draft_ready" | "revising" | "finalizing" | "emailed" | "closed" | "failed" | "email_failed";
             /**
              * Progress Message
              * @default Checking routes from London…
@@ -555,11 +555,6 @@ export interface components {
             active_turn_id?: string | null;
             /** Last Committed Turn Id */
             last_committed_turn_id?: string | null;
-            /**
-             * Email Deadline
-             * Format: date-time
-             */
-            email_deadline: string;
             /**
              * Interaction Deadline
              * Format: date-time

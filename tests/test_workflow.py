@@ -48,10 +48,10 @@ async def test_manual_dedup_query_replay_and_restart(environment, session_input)
         )
         first = await ready(handle)
         assert first.itinerary and first.itinerary.revision == 1
-        deadline = first.email_deadline
+        deadline = first.interaction_deadline
         for _ in range(3):
             assert await handle.query(Workflow.get_snapshot, first.state_revision) is None
-        assert (await handle.query(Workflow.get_snapshot)).email_deadline == deadline
+        assert (await handle.query(Workflow.get_snapshot)).interaction_deadline == deadline
         cmd = MessageCommand(id=uuid4(), text="What's included?")
         receipt = await handle.execute_update(Workflow.submit_message, cmd)
         assert receipt.accepted
@@ -73,8 +73,7 @@ async def test_manual_dedup_query_replay_and_restart(environment, session_input)
     assert len(result.model_dump_json().encode()) < 100_000
 
 
-@pytest.mark.parametrize("reason", ["inactivity", "limit"])
-async def test_automatic_finalization(environment, session_input, reason):
+async def test_session_limit_closes_without_email(environment, session_input):
     emails = []
 
     @activity.defn(name="deliver_itinerary")
@@ -82,10 +81,7 @@ async def test_automatic_finalization(environment, session_input, reason):
         emails.append(state)
         return "test-email"
 
-    limits = Limits(
-        inactivity_seconds=1 if reason == "inactivity" else 600,
-        interaction_seconds=1 if reason == "limit" else 1800,
-    )
+    limits = Limits(interaction_seconds=1)
     value = session_input.model_copy(update={"limits": limits})
     queue = str(uuid4())
     async with Worker(
@@ -94,7 +90,11 @@ async def test_automatic_finalization(environment, session_input, reason):
         result = await environment.client.execute_workflow(
             Workflow.run, value, id=str(uuid4()), task_queue=queue
         )
-    assert result.finalization_reason == reason and len(emails) == 1
+    assert result.finalization_reason == "limit"
+    assert result.phase == "closed"
+    assert result.itinerary is not None
+    assert result.email_status == "not_requested"
+    assert emails == []
 
 
 async def test_no_draft_finishes_without_email(environment, session_input):
@@ -588,6 +588,117 @@ async def test_live_revision_reuses_searches_after_worker_restart(
         await handle.fetch_history()
     )
     assert len(searches) == count + 2
+
+
+async def test_live_search_retries_once_after_lost_attempt(environment, session_input):
+    """A retryable lost attempt is recovered within the existing turn."""
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.recorded import sample
+
+    attempts: list[int] = []
+
+    @activity.defn(name="search_flights")
+    async def flights(spec: SearchSpec) -> SearchBatch:
+        attempt = activity.info().attempt
+        attempts.append(attempt)
+        if attempt == 1 and len(attempts) == 1:
+            raise RuntimeError("simulated worker loss")
+        return sample(spec, "flight").model_copy(update={"calls": 16 if attempt > 1 else 0})
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[flights, stays, deliver],
+    ):
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        result = await ready(handle)
+    assert result.itinerary is not None
+    assert attempts[:2] == [1, 2]
+
+
+async def test_second_worker_recovers_a_search_when_first_worker_stops(environment, session_input):
+    """A lost in-flight Activity can resume on another poller without losing the plan."""
+    from datetime import timedelta
+
+    from cpfc_trip.domain import SearchBatch, SearchSpec
+    from cpfc_trip.planner.recorded import sample
+
+    first_started = asyncio.Event()
+    recovered = asyncio.Event()
+
+    @activity.defn(name="search_flights")
+    async def interrupted_flight(spec: SearchSpec) -> SearchBatch:
+        activity.heartbeat()
+        first_started.set()
+        while True:
+            await asyncio.sleep(1)
+            activity.heartbeat()
+
+    @activity.defn(name="search_flights")
+    async def recovered_flight(spec: SearchSpec) -> SearchBatch:
+        assert activity.info().attempt == 2
+        recovered.set()
+        return sample(spec, "flight").model_copy(update={"calls": 16})
+
+    @activity.defn(name="search_stays")
+    async def stays(spec: SearchSpec) -> SearchBatch:
+        return sample(spec, "stay")
+
+    @activity.defn(name="deliver_itinerary")
+    async def deliver(state: Snapshot) -> str:
+        return "test-email"
+
+    value = session_input.model_copy(
+        update={
+            "planner_mode": "live",
+            "limits": Limits(initial_seconds=60, interaction_seconds=70),
+            "routes": (session_input.routes[0].model_copy(update={"enabled": True}),),
+        }
+    )
+    queue = str(uuid4())
+    async with Worker(
+        environment.client,
+        task_queue=queue,
+        workflows=[Workflow],
+        activities=[interrupted_flight, stays, deliver],
+        graceful_shutdown_timeout=timedelta(0),
+    ) as first_worker:
+        handle = await environment.client.start_workflow(
+            Workflow.run, value, id=str(uuid4()), task_queue=queue
+        )
+        await asyncio.wait_for(first_started.wait(), timeout=5)
+        await first_worker.shutdown()
+        async with Worker(
+            environment.client,
+            task_queue=queue,
+            workflows=[Workflow],
+            activities=[recovered_flight, stays, deliver],
+        ):
+            await asyncio.wait_for(recovered.wait(), timeout=25)
+            for _ in range(100):
+                result = await handle.query(Workflow.get_snapshot)
+                if result.itinerary:
+                    break
+                await asyncio.sleep(0.05)
+            assert result.itinerary is not None
 
 
 async def test_slow_comparison_keeps_first_complete_wave(environment, session_input):

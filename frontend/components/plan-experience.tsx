@@ -95,8 +95,7 @@ export function PlanExperience() {
     {terminal(snapshot) && !snapshot?.itinerary && <p className="notice">No itinerary was saved for this request. {snapshot?.email_status === "not_requested" && "No email was sent. "}<Link href="/">Try another trip brief <span className="arrow">→</span></Link></p>}
     {snapshot?.itinerary && !completing && <div className="plan-reveal"><ItineraryView itinerary={snapshot.itinerary} /></div>}
     {snapshot?.itinerary && !completing && !terminal(snapshot) && <div className="send-bar"><div><strong>Take the plan with you.</strong><small>We’ll email this saved version. Prices aren’t checked again.</small></div><button className="primary" disabled={closed} onClick={() => void finalize()}>{closed ? "Preparing your email…" : <>Send me my itinerary <span className="arrow">→</span></>}</button></div>}
-    {snapshot?.itinerary && terminal(snapshot) && <p className="fine">This planning session has ended. <Link href="/">Start a new trip brief <span className="arrow">→</span></Link></p>}
+    {snapshot?.itinerary && terminal(snapshot) && <p className="fine">This planning session has ended. {snapshot.phase === "closed" && "No email was sent. "}<Link href="/">Start a new trip brief <span className="arrow">→</span></Link></p>}
     {snapshot?.email_provider_id?.startsWith("preview-") && <div className="notice">Development email preview saved locally. No email was sent.</div>}
-    {snapshot && !closed && <p className="fine">This short session automatically emails your saved plan after inactivity or when its time limit is reached.</p>}
   </div>;
 }

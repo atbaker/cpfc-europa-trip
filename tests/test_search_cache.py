@@ -1,12 +1,14 @@
 """Short shared search cache contracts, independent of provider traffic."""
 
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
+from temporalio.testing import ActivityEnvironment
 
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import Party, SearchBatch, SearchSpec, SessionInput
@@ -152,3 +154,25 @@ async def test_cache_failure_falls_through_to_provider(
     monkeypatch.setattr("cpfc_trip.temporal.activities.acquire", fake_acquire)
     assert await SearchActivities(SearchCache(cache_engine)).search_flights(request) == batch
     assert provider_calls == 1
+
+
+async def test_recovered_search_reserves_both_attempts(
+    cache_engine: AsyncEngine, session_input: SessionInput, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ambiguous first attempt cannot refund its possibly paid calls."""
+    request = search_spec(session_input)
+    observed_heartbeats: list[tuple[object, ...]] = []
+
+    async def fake_acquire(spec: SearchSpec, mode: str) -> SearchBatch:
+        return sample(spec, mode).model_copy(update={"calls": 3})
+
+    monkeypatch.setattr("cpfc_trip.temporal.activities.acquire", fake_acquire)
+    environment = ActivityEnvironment()
+    environment.info = replace(environment.info, attempt=2)
+    environment.on_heartbeat = lambda *details: observed_heartbeats.append(details)
+    recovered = await environment.run(
+        SearchActivities(SearchCache(cache_engine)).search_flights, request
+    )
+    assert recovered.journeys
+    assert recovered.calls == 16
+    assert observed_heartbeats

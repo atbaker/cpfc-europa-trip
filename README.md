@@ -15,8 +15,10 @@ The domain is **eaglesaway.com**; the verified transactional sender uses **notif
 
 The DigitalOcean app runs at
 [eagles-away-preview-ifemt.ondigitalocean.app](https://eagles-away-preview-ifemt.ondigitalocean.app/)
-on DigitalOcean App Platform in Frankfurt: one web service, one continuously running Temporal
-worker, a migration job, an hourly retention job, and PostgreSQL. The app's primary domain is
+on DigitalOcean App Platform in Frankfurt: one web service, a continuously running Temporal
+worker component, a migration job, an hourly retention job, and PostgreSQL. The worker component
+is configured for two replicas on the scalable shared-CPU plan during the October launch update.
+The app's primary domain is
 `eaglesaway.com`. HTTP Basic remains available for a protected preview; public access is enabled
 only when `PREVIEW_ACCESS_REQUIRED=false` is set in the deployed app spec. The earlier GCP review and deployment evidence
 are in the [deployment readiness record](planning/2026-10-06-deployment-readiness.md).
@@ -50,6 +52,55 @@ The DigitalOcean preview includes its generated `ondigitalocean.app` URL so POST
 there while the custom domain is being set up. The Resend sending key is a runtime-only App Platform secret. Signed delivery-status
 webhooks are not configured, so the app records provider acceptance but cannot confirm inbox
 delivery or bounces.
+
+### Worker capacity and releases
+
+The launch worker target is two `apps-s-1vcpu-1gb` replicas at eight concurrent Activities
+each: 16 slots in total, matching the former single worker's limit. This costs about $24/month
+for worker compute, versus $10/month for the former fixed single worker; web, database and
+provider charges are separate. Search Activities heartbeat every five seconds and allow one
+Temporal retry after a lost attempt. Each attempt can use at most eight SearchApi requests;
+the Workflow reserves 16 per search and never refunds an ambiguous first attempt. The
+180-second initial and 90-second follow-up limits still apply, so a loss near a deadline
+may end that turn before recovery finishes. SearchApi account limits and provider 429s, not
+worker CPU alone, must be checked before adding slots.
+
+| Approach | Worker compute/month | Launch tradeoff |
+| --- | ---: | --- |
+| One fixed worker | $10 | Lowest cost; a worker restart temporarily removes all pollers |
+| Two fixed scalable shared workers | $24 | Chosen for failover and unchanged total Activity capacity |
+| Dedicated CPU autoscaling, one to two workers | $34–$68 | CPU is an unreliable signal for provider waits |
+| Queue-driven scaling, one to three shared workers | $12–$36 plus controller | Better signal, but needs custom scaling and alert infrastructure |
+
+The deployed worker uses Temporal Worker Deployment `cpfc-trip` with a full commit SHA build ID
+and pinned Workflows. Build each new worker version from an immutable release branch, start its
+replicas, verify pollers, then set it Current in Temporal. Keep at least one old-build replica
+until `temporal worker deployment describe-version` reports it drained. The first cutover from
+unversioned workers may replace them directly only after verifying zero running Eagles Away
+Workflows. DigitalOcean must allow 180 seconds after SIGTERM; the SDK drains for up to 150
+seconds. Do not reuse a build ID for different code. The live app spec is ignored because it
+contains secrets; never paste it into logs or commit it.
+
+With a Temporal CLI profile for the Eagles Away namespace, the promotion checks are:
+
+```bash
+temporal worker deployment describe --name cpfc-trip
+temporal task-queue describe --task-queue cpfc-trip-v3 --task-queue-type activity --select-build-id <build-id>
+temporal task-queue describe --task-queue cpfc-trip-v3 --task-queue-type workflow --select-build-id <build-id>
+temporal worker deployment set-current-version --deployment-name cpfc-trip --build-id <build-id>
+temporal worker deployment describe-version --deployment-name cpfc-trip --build-id <old-build-id>
+```
+
+Inspect both workflow and activity Task Queues, current version, poller counts, oldest backlog
+age and DigitalOcean restart/memory metrics after deployment and after traffic spikes. Page if
+either task type has zero live pollers or backlog age exceeds five seconds for ten minutes.
+Consider a third worker only if p95 Schedule-to-Start exceeds two seconds for ten minutes,
+available slots are exhausted, and SearchApi/Gemini are not throttling. A fixed second worker
+provides immediate failover. CPU autoscaling on DigitalOcean requires dedicated CPU and is a
+poor signal for network-bound searches; queue-driven scaling would need a separate controller
+and should wait for measured demand. See [DigitalOcean pricing](https://docs.digitalocean.com/products/app-platform/details/pricing/),
+[scaling](https://docs.digitalocean.com/products/app-platform/how-to/scale-app/) and
+[Temporal worker guidance](https://docs.temporal.io/best-practices/worker).
 
 ## Start locally
 
@@ -205,6 +256,8 @@ under a new identity after the safe retry window. Existing real delivery was val
 September; a fresh engineer should use previews unless an actual send has been authorized.
 If the search cannot commit an itinerary, the session ends with an on-page explanation and no
 email or delivery record. A Temporal patch keeps older failure-notice histories replayable.
+The user must select “Send me my itinerary” to send a complete plan. The planning session ends
+after 30 minutes without automatically emailing; a saved plan remains visible on its page.
 After the email provider accepts a send, the app erases its local encrypted recipient address
 and address hash in the same transaction as the provider receipt. An ambiguous send retains the
 address until it can be retried or reconciled; the provider may separately retain delivery data.

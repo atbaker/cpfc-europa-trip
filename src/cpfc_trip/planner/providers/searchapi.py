@@ -30,6 +30,7 @@ from cpfc_trip.planner.prices import money
 
 ENDPOINT = "https://www.searchapi.io/api/v1/search"
 REQUEST_CAPS = {"flight": 8, "rail": 8, "stay": 8}
+SEARCH_ACTIVITY_ATTEMPTS = 2
 
 
 class ProviderError(Exception):

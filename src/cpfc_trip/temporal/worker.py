@@ -51,8 +51,9 @@ async def run() -> None:
                 delivery.deliver_itinerary,
             ],
             deployment_config=deployment,
-            max_concurrent_activities=16,
-            graceful_shutdown_timeout=timedelta(seconds=25),
+            max_concurrent_activities=8,
+            max_heartbeat_throttle_interval=timedelta(seconds=5),
+            graceful_shutdown_timeout=timedelta(seconds=150),
         ):
             await stop.wait()
     finally:

@@ -74,7 +74,7 @@ class Repository:
                     f.catalog_version for f in fixtures if f.id in brief.fixture_ids
                 ),
                 planner_mode=self.settings.planner_mode,
-                limits=Limits(inactivity_seconds=self.settings.inactivity_timeout_seconds),
+                limits=Limits(),
             )
             email = str(request.email)
             db.add(

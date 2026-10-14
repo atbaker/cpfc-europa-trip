@@ -20,7 +20,6 @@ const snapshot: Snapshot = {
   progress_message: "Your draft is ready.",
   itinerary: { revision: 1, generated_at: "2026-10-05T12:00:00Z", trips: [], caveats: [], ranking_policy_version: "1" },
   transcript_tail: [{ id: "reply", turn_id: "turn", role: "assistant", content: "Your plan is ready.", created_at: "2026-10-05T12:00:00Z" }],
-  email_deadline: "2026-10-05T13:00:00Z",
   interaction_deadline: "2026-10-05T13:00:00Z",
   follow_ups_remaining: 10,
   email_status: "not_requested",
@@ -42,6 +41,13 @@ describe("trip plan", () => {
     render(<PlanExperience />);
     expect(await screen.findByRole("link", { name: /Start a new trip brief/ })).toHaveAttribute("href", "/");
     expect(screen.queryByRole("region", { name: "Your conversation" })).not.toBeInTheDocument();
+  });
+
+  it("keeps an expired plan visible and says no email was sent", async () => {
+    state.snapshot = { ...snapshot, phase: "closed", finalization_reason: "limit" };
+    render(<PlanExperience />);
+    expect(await screen.findByText(/No email was sent/)).toBeVisible();
+    expect(screen.queryByText("Take the plan with you.")).not.toBeInTheDocument();
   });
 
   it("explains that an unsuccessful search sends no email", async () => {

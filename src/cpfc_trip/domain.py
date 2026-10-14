@@ -114,7 +114,6 @@ class Route(Record):
 class Limits(Record):
     initial_seconds: int = Field(180, ge=1, le=180)
     follow_up_seconds: int = Field(90, ge=1, le=90)
-    inactivity_seconds: int = Field(600, ge=1, le=600)
     interaction_seconds: int = Field(1800, ge=1, le=1800)
     follow_ups: int = Field(10, ge=1, le=10)
     search_initial: int = Field(64, ge=1, le=64)
@@ -281,6 +280,7 @@ Phase = Literal[
     "revising",
     "finalizing",
     "emailed",
+    "closed",
     "failed",
     "email_failed",
 ]
@@ -300,7 +300,6 @@ class Snapshot(Record):
     transcript_tail: tuple[ChatTurn, ...] = ()
     active_turn_id: UUID | None = None
     last_committed_turn_id: UUID | None = None
-    email_deadline: AwareDatetime
     interaction_deadline: AwareDatetime
     follow_ups_remaining: int = 10
     finalization_reason: Literal["manual", "inactivity", "limit", "planning_failed"] | None = None

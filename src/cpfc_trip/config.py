@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr = SecretStr("")
     resend_from_email: str = ""
     resend_webhook_secret: SecretStr = SecretStr("")
-    inactivity_timeout_seconds: int = 600
     cloud_sql_instance: str = ""
     database_user: str = ""
     database_name: str = "cpfc"

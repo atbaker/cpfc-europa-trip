@@ -27,7 +27,11 @@ with workflow.unsafe.imports_passed_through():
     )
     from cpfc_trip.planner.agent import MODEL_SETTINGS, Intent, planner
     from cpfc_trip.planner.planning import choose, enumerate_specs, feasible_journey
-    from cpfc_trip.planner.providers.searchapi import REQUEST_CAPS, fingerprint
+    from cpfc_trip.planner.providers.searchapi import (
+        REQUEST_CAPS,
+        SEARCH_ACTIVITY_ATTEMPTS,
+        fingerprint,
+    )
     from cpfc_trip.planner.recorded import sample
 
 
@@ -70,7 +74,6 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             public_session_id=data.public_session_id,
             origin_city=data.brief.origin_city,
             progress_message=f"Checking routes from {data.brief.origin_city}…",
-            email_deadline=now + timedelta(seconds=data.limits.inactivity_seconds),
             interaction_deadline=now + timedelta(seconds=data.limits.interaction_seconds),
             follow_ups_remaining=data.limits.follow_ups,
         )
@@ -83,8 +86,8 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
     def closed(self) -> bool:
         return (
             self.finalize_requested
-            or self.state.phase in {"finalizing", "emailed", "failed", "email_failed"}
-            or workflow.now() >= min(self.state.email_deadline, self.state.interaction_deadline)
+            or self.state.phase in {"finalizing", "emailed", "closed", "failed", "email_failed"}
+            or workflow.now() >= self.state.interaction_deadline
             or self.state.follow_ups_remaining <= 0
         )
 
@@ -116,7 +119,6 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             created_at=workflow.now(),
         )
         self.change(
-            email_deadline=workflow.now() + timedelta(seconds=self.data.limits.inactivity_seconds),
             follow_ups_remaining=self.state.follow_ups_remaining - 1,
             transcript_tail=(*self.state.transcript_tail, turn),
             active_turn_id=command.id,
@@ -128,6 +130,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
         # Finalization is one idempotent state transition; no unbounded list of finalize IDs.
         if not self.finalize_requested and self.state.phase not in {
             "emailed",
+            "closed",
             "failed",
             "email_failed",
         }:
@@ -284,10 +287,9 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                             spec,
                             result_type=SearchBatch,
                             start_to_close_timeout=timedelta(seconds=85),
-                            schedule_to_close_timeout=timedelta(seconds=90),
-                            # A paid request may have completed before worker loss. Do not replay
-                            # the whole adapter outside the reserved session call budget.
-                            retry_policy=RetryPolicy(maximum_attempts=1),
+                            schedule_to_close_timeout=timedelta(seconds=175),
+                            heartbeat_timeout=timedelta(seconds=15),
+                            retry_policy=RetryPolicy(maximum_attempts=SEARCH_ACTIVITY_ATTEMPTS),
                         )
                         known_calls = True
                     except Exception:
@@ -333,7 +335,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                             if kind == "flight":
                                 flight_batches.append(response)
                             continue
-                        cap = REQUEST_CAPS[kind]
+                        cap = REQUEST_CAPS[kind] * SEARCH_ACTIVITY_ATTEMPTS
                         if (
                             used + cap > allowance
                             or self.search_reserved + cap > self.data.limits.search_session
@@ -585,12 +587,7 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
             ):
                 self.change(finalization_reason="limit")
                 break
-            if now >= self.state.email_deadline:
-                self.change(finalization_reason="inactivity")
-                break
-            timeout = (
-                min(self.state.email_deadline, self.state.interaction_deadline) - now
-            ).total_seconds()
+            timeout = (self.state.interaction_deadline - now).total_seconds()
             try:
                 await workflow.wait_condition(
                     lambda: self.pending is not None or self.finalize_requested,
@@ -608,6 +605,14 @@ class TravelPlanningSessionWorkflow(PydanticAIWorkflow):
                 phase="failed",
                 active_turn_id=None,
                 progress_message="No complete trip was found. No email was sent.",
+            )
+            await workflow.wait_condition(workflow.all_handlers_finished)
+            return self.state
+        if self.state.finalization_reason != "manual" and workflow.patched("manual-email-only"):
+            self.change(
+                phase="closed",
+                active_turn_id=None,
+                progress_message="This planning session has ended. No email was sent.",
             )
             await workflow.wait_condition(workflow.all_handlers_finished)
             return self.state

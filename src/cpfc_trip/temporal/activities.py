@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from cpfc_trip.emailing import render
 from cpfc_trip.persistence.models import DeliveryRow, SessionRow
 from cpfc_trip.persistence.repository import Repository, digest
 from cpfc_trip.persistence.search_cache import SearchCache, SearchMode
-from cpfc_trip.planner.providers.searchapi import acquire
+from cpfc_trip.planner.providers.searchapi import REQUEST_CAPS, SEARCH_ACTIVITY_ATTEMPTS, acquire
 from cpfc_trip.resend import send
 
 
@@ -25,6 +26,32 @@ class SearchActivities:
         self.cache = cache
 
     async def _search(self, spec: SearchSpec, mode: SearchMode) -> SearchBatch:
+        heartbeat_task: asyncio.Task[None] | None = None
+        if activity.in_activity():
+            activity.heartbeat()
+            heartbeat_task = asyncio.create_task(self._heartbeat())
+        try:
+            result = await self._cached_or_live(spec, mode)
+            # The prior worker may have used every reserved provider call before loss.
+            # A second attempt reports the worst case so the Workflow never refunds it.
+            if activity.in_activity() and activity.info().attempt > 1:
+                return result.model_copy(
+                    update={"calls": REQUEST_CAPS[mode] * SEARCH_ACTIVITY_ATTEMPTS}
+                )
+            return result
+        finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat_task
+
+    @staticmethod
+    async def _heartbeat() -> None:
+        while True:
+            await asyncio.sleep(5)
+            activity.heartbeat()
+
+    async def _cached_or_live(self, spec: SearchSpec, mode: SearchMode) -> SearchBatch:
         try:
             async with asyncio.timeout(1):
                 cached = await self.cache.get(spec, mode)
