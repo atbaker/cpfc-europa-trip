@@ -245,4 +245,5 @@
 ## 14 October 2026 — active form step contrast
 
 - The owner flagged the black “1” in the filled red active step. Changed the numeral to white and 19px bold on the unchanged official red `#ee2e24`. The measured contrast is 4.16:1; at this large bold size it exceeds the 3:1 WCAG 2.2 minimum. Desktop, 390px and 320px renders showed the numeral fitting its circle with no horizontal overflow.
-- The Next.js production build and ESLint passed. This is a frontend-only change; no trip search or email was used for verification. Live deployment is pending.
+- The Next.js production build and ESLint passed. This was a frontend-only change; no trip search or email was used for verification.
+- DigitalOcean deployment `350766b6-ff06-4797-b708-94b6e8bb0499` reached `ACTIVE`. A live 390px browser check found the current step's “1” rendered white, 19px bold on `rgb(238, 46, 36)`. The brand red and the two-worker release branch were unchanged.
