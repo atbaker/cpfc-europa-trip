@@ -22,12 +22,12 @@ def safe_api_route(method: str, path: str) -> str | None:
     if method == "GET" and path == "/api/catalog":
         return "catalog"
     if method == "POST" and path == "/api/sessions":
-        return "create_session"
+        return "create_plan"
     parts = path.strip("/").split("/")
     if len(parts) == 4 and parts[:2] == ["api", "sessions"]:
         return {
-            ("GET", "snapshot"): "session_snapshot",
-            ("POST", "messages"): "session_message",
-            ("POST", "finalize"): "session_finalize",
+            ("GET", "snapshot"): "plan_snapshot",
+            ("POST", "messages"): "plan_message",
+            ("POST", "finalize"): "plan_finalize",
         }.get((method, parts[3]))
     return None

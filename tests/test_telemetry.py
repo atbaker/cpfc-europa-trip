@@ -30,7 +30,8 @@ def test_worker_telemetry_omits_model_content(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_api_route_labels_exclude_session_ids_and_queries() -> None:
-    assert safe_api_route("POST", "/api/sessions") == "create_session"
-    assert safe_api_route("GET", "/api/sessions/private-id/snapshot") == "session_snapshot"
-    assert safe_api_route("POST", "/api/sessions/private-id/messages") == "session_message"
+    assert safe_api_route("POST", "/api/sessions") == "create_plan"
+    assert safe_api_route("GET", "/api/sessions/private-id/snapshot") == "plan_snapshot"
+    assert safe_api_route("POST", "/api/sessions/private-id/messages") == "plan_message"
+    assert safe_api_route("POST", "/api/sessions/private-id/finalize") == "plan_finalize"
     assert safe_api_route("GET", "/api/unknown/private-id") is None
