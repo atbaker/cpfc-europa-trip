@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { Fixture, Itinerary, Leg, Stay, Trip, formatMoney } from "../lib/api";
+import { CPFC_TICKET_URL } from "../lib/tickets";
 function when(value: string): string { return new Date(value).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " UTC"; }
 function local(value: string): string { return new Date(`${value.slice(0, 16)}:00Z`).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " local time"; }
 function Price({ item }: { item: Leg | Stay }) {
@@ -12,7 +13,7 @@ function Price({ item }: { item: Leg | Stay }) {
   {item.offer.link_kind === "contextual_search" && item.offer.booking_url && <small>You may need to select this option again. Prices can change.</small>}</div>;
 }
 function MatchCard({ fixture }: { fixture: Fixture }) {
-  return <section className="match-card"><span className="eyebrow">MATCHDAY</span><h3>{fixture.opponent} v Crystal Palace</h3><p>{new Date(fixture.kickoff_at).toLocaleString("en-GB", { timeZone: fixture.timezone, dateStyle: "full", timeStyle: "short" })} local</p><p className="fine">{fixture.venue} · {fixture.venue_status} venue · Match ticket not included</p></section>;
+  return <section className="match-card"><span className="eyebrow">MATCHDAY</span><h3>{fixture.opponent} v Crystal Palace</h3><p>{new Date(fixture.kickoff_at).toLocaleString("en-GB", { timeZone: fixture.timezone, dateStyle: "full", timeStyle: "short" })} local</p><p className="fine">{fixture.venue} · {fixture.venue_status} venue · Match ticket not included</p><a className="outbound" href={CPFC_TICKET_URL} target="_blank" rel="noopener noreferrer">CPFC members: buy away match tickets <span className="arrow">↗</span></a></section>;
 }
 export function JourneyPreview({ trip, children }: { trip: Trip; children: ReactNode }) {
   const journey = trip.journey;

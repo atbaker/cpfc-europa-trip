@@ -229,6 +229,15 @@ def test_email_matches_plan_card_structure(session_input: SessionInput) -> None:
     assert "#bf1934" in html and "#20509a" in html
     assert "Known subtotal" in html
     assert "Price source:" in html
+    ticket_url = (
+        "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&"
+        "preFilterName=3.+Away+Matches+%2526+Coach+Travel&"
+        "utm_source=website&utm_medium=referral&"
+        "utm_campaign=WebStoryTickets021026"
+    )
+    assert ticket_url in unescape(html)
+    assert ticket_url in payload["text"]
+    assert "CPFC members: buy away match tickets" in unescape(html)
 
 
 def test_email_shows_saved_caveats_once(session_input: SessionInput) -> None:

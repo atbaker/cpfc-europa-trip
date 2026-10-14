@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Brief, Fixture, londonDayBoundary, request } from "../lib/api";
 import formCatalog from "../lib/form-catalog.json";
 import { trackAnalytics } from "../lib/analytics";
+import { CPFC_TICKET_URL } from "../lib/tickets";
 
 const stepNames = ["Match & dates", "Travel preferences", "Your details"] as const;
 const bundledFixtures = formCatalog.fixtures as Fixture[];
@@ -148,6 +149,7 @@ export function PlannerForm() {
         <label>Starting from<span className="select-wrap"><select name="origin_city" value={origin} onChange={event => { setOrigin(event.target.value); setTransport(null); }} required={step === 0}>{originCities.map(city => <option key={city} value={city}>{city}</option>)}</select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
         <p className="fine">Choose a UK city with a major international airport. We’ll check dated flights, including suitable connections, and any available train route. A route for every match isn’t guaranteed.</p>
         <fieldset><legend>Choose your away match</legend><div className="fixtures">{fixtures.map(f => <label key={f.id} className={`fixture ${selected === f.id ? "selected" : ""}`}><input type="radio" name="fixture" value={f.id} checked={selected === f.id} onChange={() => { setSelected(f.id); setTransport(null); }} /><span><strong>{f.opponent}</strong><small>{new Date(f.kickoff_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })} · {f.venue}, {f.venue_location || f.city}</small><small>UEFA Europa League</small></span></label>)}</div></fieldset>
+        <a className="outbound" href={CPFC_TICKET_URL} target="_blank" rel="noopener noreferrer">CPFC members: buy away match tickets <span className="arrow">↗</span></a>
         <label>Time around the match<span className="select-wrap"><select name="flexibility" defaultValue="day_either_side"><option value="day_either_side">A day either side</option><option value="two_days">Up to two days either side</option><option value="tight">A short trip</option></select><span className="select-chevron" aria-hidden="true">⌄</span></span></label>
         <details><summary>Choose specific travel dates instead</summary><p className="fine">Enter both dates for the match. Otherwise, we’ll use the time you chose above. Dates use London time.</p>{fixtures.filter(f => f.id === selected).map(f => <fieldset key={f.id} className="date-group"><legend>{f.opponent}</legend><div className="grid-two"><label>Earliest departure<input type="date" name={`start-${f.id}`} /></label><label>Latest return<input type="date" name={`end-${f.id}`} /></label></div></fieldset>)}</details>
         <div className="form-actions"><button type="button" className="primary" onClick={nextStep}>Continue to travel preferences <span className="arrow">→</span></button></div>

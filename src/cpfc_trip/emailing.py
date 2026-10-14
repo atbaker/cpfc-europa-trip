@@ -14,6 +14,12 @@ RED = "#bf1934"
 BLUE = "#20509a"
 LINE = "#d9dfe7"
 SOFT_BLUE = "#edf3fa"
+CPFC_TICKET_URL = (
+    "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&"
+    "preFilterName=3.+Away+Matches+%2526+Coach+Travel&"
+    "utm_source=website&utm_medium=referral&"
+    "utm_campaign=WebStoryTickets021026"
+)
 
 
 def _money(amount: Money) -> str:
@@ -46,12 +52,12 @@ def _card(content: str, *, match: bool = False) -> str:
     )
 
 
-def _link(value: str | None, label: str) -> str:
+def _link(value: str | None, label: str, *, color: str = BLUE) -> str:
     url = safe_url(value) if value else None
     if not url:
         return ""
     return (
-        f'<a href="{escape(url, quote=True)}" style="color:{BLUE};font-size:14px;'
+        f'<a href="{escape(url, quote=True)}" style="color:{color};font-size:14px;'
         'font-weight:700;text-decoration:underline">'
         f"{escape(label)} &#8599;</a>"
     )
@@ -157,7 +163,10 @@ def _match(trip: Trip) -> str:
         f"{escape(kickoff.strftime('%A %d %B %Y, %H:%M'))} local</p>"
         f'<p style="margin:0;color:#e4edfb;font-size:13px;line-height:1.5">'
         f"{escape(fixture.venue)} · {escape(fixture.venue_status)} venue · "
-        "Match ticket not included</p>",
+        "Match ticket not included</p>"
+        '<p style="margin:12px 0 0">'
+        + _link(CPFC_TICKET_URL, "CPFC members: buy away match tickets", color="#ffffff")
+        + "</p>",
         match=True,
     )
 
@@ -288,6 +297,7 @@ def render(snapshot: Snapshot) -> dict[str, str]:
                 "",
                 f"Palace away at {trip.fixture.opponent}",
                 f"Kickoff: {trip.fixture.kickoff_at.isoformat()} (UTC)",
+                f"CPFC members: buy away match tickets: {CPFC_TICKET_URL}",
                 trip.summary,
             ]
             items = list(trip.journey.outbound + trip.journey.inbound) if trip.journey else []

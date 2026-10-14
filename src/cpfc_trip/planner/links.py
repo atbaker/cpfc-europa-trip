@@ -5,6 +5,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from cpfc_trip.domain import Party
 
 ALLOWED = {
+    "www.eticketing.co.uk",
     "www.olvallee.fr",
     "www.rhonexpress.fr",
     "www.google.com",

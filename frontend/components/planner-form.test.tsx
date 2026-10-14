@@ -20,6 +20,7 @@ describe("trip brief steps", () => {
     expect(screen.getByRole("option", { name: "Manchester" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Olympique Lyonnais/ })).toBeChecked();
     expect(screen.getByRole("radio", { name: /FC Red Bull Salzburg/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /CPFC members: buy away match tickets/ })).toHaveAttribute("href", "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&preFilterName=3.+Away+Matches+%2526+Coach+Travel&utm_source=website&utm_medium=referral&utm_campaign=WebStoryTickets021026");
     await act(async () => { await Promise.resolve(); });
   });
 

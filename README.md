@@ -143,6 +143,8 @@ airport and, where listed, a dated rail connection. A direct service and complet
 are not guaranteed. Non-London rail includes a separate UK train and an unpriced London station
 transfer; the planner requires at least three hours before Eurostar. Its observed leg fares are
 single-person estimates, not a verified group total.
+The form, match card and saved email link CPFC members to the club's away-ticket page. Match
+tickets remain separate from the travel plan and subject to the club's availability and eligibility.
 If an airport preference in the extra instructions rules out every verified complete trip, the
 planner rechecks the travel results without that preference and labels any alternative airport
 in the plan. If no complete trip is verified, the page explains whether the checked results

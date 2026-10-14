@@ -71,6 +71,7 @@ describe("trip plan", () => {
     const checking = screen.getByRole("heading", { name: "Finding your stay and comparing options" });
     const returning = screen.getByRole("heading", { name: /Lyon.*Manchester/ });
     expect(match).toBeVisible();
+    expect(screen.getByRole("link", { name: /CPFC members: buy away match tickets/ })).toHaveAttribute("href", "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&preFilterName=3.+Away+Matches+%2526+Coach+Travel&utm_source=website&utm_medium=referral&utm_campaign=WebStoryTickets021026");
     expect(checking).toBeVisible();
     expect(returning).toBeVisible();
     expect(match.compareDocumentPosition(checking) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
