@@ -241,3 +241,8 @@
 - The owner refined the header to read “Built for” above the crest, centered across the page. Powered by Temporal remains at the right on desktop. At 360px and below, the wordmark and Temporal credit stack above the centered crest so their labels do not touch. The crest asset and official palette did not change.
 - The Next.js production build and ESLint passed. Rendered widths 1440, 390 and 320px had a centered credit and no horizontal overflow; the narrow layout displayed the two labels on separate rows. This was a frontend-only change.
 - DigitalOcean deployment `bc59dcf6-b9bd-4c38-be2f-aaa93e433454` reached `ACTIVE`. The live home page at 1440, 390 and 320px showed “Built for” with the crest centered exactly and no horizontal overflow. `/healthz` returned HTTP 200. The app spec retained two `planner-brand` replicas on the existing immutable worker branch. No trip search or email was submitted during this visual release.
+
+## 14 October 2026 — active form step contrast
+
+- The owner flagged the black “1” in the filled red active step. Changed the numeral to white and 19px bold on the unchanged official red `#ee2e24`. The measured contrast is 4.16:1; at this large bold size it exceeds the 3:1 WCAG 2.2 minimum. Desktop, 390px and 320px renders showed the numeral fitting its circle with no horizontal overflow.
+- The Next.js production build and ESLint passed. This is a frontend-only change; no trip search or email was used for verification. Live deployment is pending.

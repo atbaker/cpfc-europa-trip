@@ -88,7 +88,7 @@ small { display: block; }
 .form-progress li:not(:last-child)::after { content: ""; flex: 1; height: 1px; min-width: 10px; margin-left: 4px; background: var(--line); }
 .form-progress li[aria-current], .form-progress li.complete { color: var(--ink); font-weight: 700; }
 .step-number { display: grid; place-items: center; flex: 0 0 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); }
-.form-progress li[aria-current] .step-number { background: var(--red); border-color: var(--red); color: var(--ink); }
+.form-progress li[aria-current] .step-number { background: var(--red); border-color: var(--red); color: #fff; font-size: 19px; line-height: 1; }
 .form-progress li.complete .step-number { background: var(--blue); border-color: var(--blue); color: #fff; }
 .form-pages.transitioning .form-page:not([hidden]) { animation: form-step-enter .42s .08s cubic-bezier(.2, .7, .2, 1) both; }
 .form-page h2 { margin-bottom: 10px; }
