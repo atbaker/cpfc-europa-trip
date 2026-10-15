@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, date, datetime, timedelta
+from math import asin, cos, isfinite, radians, sin, sqrt
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,7 @@ from pydantic import ValidationError
 
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import (
+    Coordinates,
     Evidence,
     Journey,
     Leg,
@@ -475,6 +477,25 @@ def normalize_stay(
     )
 
 
+def _stadium_distance_km(raw: object, stadium: Coordinates) -> float | None:
+    if not isinstance(raw, dict):
+        return None
+    latitude, longitude = raw.get("latitude"), raw.get("longitude")
+    if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+        return None
+    if not (isfinite(latitude) and isfinite(longitude)):
+        return None
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return None
+    latitude_delta = radians(latitude - stadium.latitude)
+    longitude_delta = radians(longitude - stadium.longitude)
+    arc = (
+        sin(latitude_delta / 2) ** 2
+        + cos(radians(stadium.latitude)) * cos(radians(latitude)) * sin(longitude_delta / 2) ** 2
+    )
+    return 6371 * 2 * asin(sqrt(min(arc, 1)))
+
+
 async def search_stays(api: SearchApi, spec: SearchSpec) -> SearchBatch:
     p: dict[str, Any] = dict(
         engine="booking",
@@ -516,6 +537,9 @@ async def search_stays(api: SearchApi, spec: SearchSpec) -> SearchBatch:
             and any(x in prop.get("room_type", "").lower() for x in ("dorm", "bed in"))
         )
     ]
+    quality_weight = {"budget": 0, "value": 1, "comfort": 4}[spec.budget_tier]
+    distance_weight = {"budget": 2, "value": 6, "comfort": 10}[spec.budget_tier]
+    stadium = spec.fixture.venue_coordinates
 
     def property_rank(prop: dict[str, Any]) -> float:
         price = prop.get("extracted_price")
@@ -523,9 +547,11 @@ async def search_stays(api: SearchApi, spec: SearchSpec) -> SearchBatch:
         dorm = any(x in prop.get("room_type", "").lower() for x in ("dorm", "bed in"))
         rating = prop.get("rating") or 5
         penalty = (150 if dorm else 0) + (10 - float(rating)) * 25
-        return cost + penalty * (
-            0 if spec.budget_tier == "budget" else 1 if spec.budget_tier == "value" else 4
+        distance = _stadium_distance_km(prop.get("gps_coordinates"), stadium) if stadium else None
+        distance_penalty = (
+            min(distance if distance is not None else 25, 25) * distance_weight if stadium else 0
         )
+        return cost + penalty * quality_weight + distance_penalty
 
     properties.sort(key=property_rank)
     for prop in properties[:2]:

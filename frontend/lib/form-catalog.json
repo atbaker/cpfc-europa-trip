@@ -8,10 +8,14 @@
       "kickoff_at": "2026-10-15T16:45:00Z",
       "venue": "Parc Olympique Lyonnais",
       "venue_location": "Décines-Charpieu, France",
+      "venue_coordinates": {
+        "latitude": 45.765224,
+        "longitude": 4.982131
+      },
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1"
+      "catalog_version": "2026-10-15.away.2"
     },
     {
       "id": "uel-2026-besiktas-away",
@@ -21,10 +25,14 @@
       "kickoff_at": "2026-10-22T19:00:00Z",
       "venue": "Tüpraş Stadium",
       "venue_location": "Istanbul, Türkiye",
+      "venue_coordinates": {
+        "latitude": 41.039167,
+        "longitude": 28.994167
+      },
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1"
+      "catalog_version": "2026-10-15.away.2"
     },
     {
       "id": "uel-2026-jagiellonia-away",
@@ -34,10 +42,14 @@
       "kickoff_at": "2026-12-10T17:45:00Z",
       "venue": "Bialystok City Stadium",
       "venue_location": "Białystok, Poland",
+      "venue_coordinates": {
+        "latitude": 53.105611,
+        "longitude": 23.148889
+      },
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1"
+      "catalog_version": "2026-10-15.away.2"
     },
     {
       "id": "uel-2026-salzburg-away",
@@ -47,10 +59,14 @@
       "kickoff_at": "2027-01-28T20:00:00Z",
       "venue": "Red Bull Arena",
       "venue_location": "Kleßheim, Austria",
+      "venue_coordinates": {
+        "latitude": 47.81625,
+        "longitude": 12.998222
+      },
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1"
+      "catalog_version": "2026-10-15.away.2"
     }
   ],
   "origin_cities": [

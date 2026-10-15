@@ -65,6 +65,11 @@ class CreateSession(Record):
     brief: Brief
 
 
+class Coordinates(Record):
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+
+
 class Fixture(Record):
     id: str
     opponent: str
@@ -73,6 +78,7 @@ class Fixture(Record):
     kickoff_at: AwareDatetime
     venue: str
     venue_location: str = ""
+    venue_coordinates: Coordinates | None = None
     venue_status: Literal["provisional", "confirmed"] = "provisional"
     source_url: str
     source_checked_at: AwareDatetime

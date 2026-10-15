@@ -97,6 +97,18 @@ async def test_hotel_cache_ignores_route_but_keys_preferences(
         await cache.get(request.model_copy(update={"party": Party(adults=1)}), "stay", now=CHECKED)
         is None
     )
+    assert request.fixture.venue_coordinates is not None
+    moved_venue = request.fixture.model_copy(
+        update={
+            "venue_coordinates": request.fixture.venue_coordinates.model_copy(
+                update={"latitude": request.fixture.venue_coordinates.latitude + 0.01}
+            )
+        }
+    )
+    assert (
+        await cache.get(request.model_copy(update={"fixture": moved_venue}), "stay", now=CHECKED)
+        is None
+    )
     assert await cache.get(request, "stay", now=CHECKED + timedelta(hours=24)) is None
 
 

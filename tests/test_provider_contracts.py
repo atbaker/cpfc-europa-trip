@@ -470,3 +470,60 @@ async def test_later_property_failure_preserves_checked_rooms(session_input, set
         assert len(batch.stays) == 1
         assert batch.stays[0].room_description == "Twin Room"
         assert batch.calls == 4
+
+
+async def test_hotel_shortlist_considers_stadium_location_within_first_40(session_input, settings):
+    from pydantic import SecretStr
+
+    from cpfc_trip.planner.providers.searchapi import search_stays
+
+    fixture = session_input.fixtures[0]
+    assert fixture.venue_coordinates is not None
+    base = data("hotels")["properties"][0]
+    properties = [
+        {
+            **base,
+            "link": f"https://www.booking.com/hotel/fr/candidate-{index}.html",
+            "extracted_price": 100,
+            "rating": 8,
+            "gps_coordinates": {"latitude": 45.7527, "longitude": 4.8387},
+        }
+        for index in range(39)
+    ]
+    properties[0]["gps_coordinates"] = None
+    properties.append(
+        {
+            **base,
+            "link": "https://www.booking.com/hotel/fr/near-stadium.html",
+            "extracted_price": 115,
+            "rating": 8,
+            "gps_coordinates": fixture.venue_coordinates.model_dump(),
+        }
+    )
+    properties.append(
+        {
+            **base,
+            "link": "https://www.booking.com/hotel/fr/after-first-40.html",
+            "extracted_price": 10,
+            "rating": 10,
+            "gps_coordinates": fixture.venue_coordinates.model_dump(),
+        }
+    )
+    requested_details = []
+
+    def respond(request):
+        params = parse_qs(request.url.query.decode())
+        if params["engine"] == ["booking"]:
+            return httpx.Response(200, json={"properties": properties})
+        requested_details.append(params["url"][0])
+        return httpx.Response(200, json={})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        api = SearchApi(
+            client, settings.model_copy(update={"searchapi_api_key": SecretStr("test-secret")})
+        )
+        await search_stays(api, spec(session_input))
+
+    assert len(requested_details) == 2
+    assert any("near-stadium" in url for url in requested_details)
+    assert all("after-first-40" not in url for url in requested_details)

@@ -241,6 +241,13 @@ export interface components {
             /** Expected Revision */
             expected_revision?: number | null;
         };
+        /** Coordinates */
+        Coordinates: {
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+        };
         /** CreateSession */
         CreateSession: {
             /**
@@ -294,6 +301,7 @@ export interface components {
              * @default
              */
             venue_location: string;
+            venue_coordinates?: components["schemas"]["Coordinates"] | null;
             /**
              * Venue Status
              * @default provisional

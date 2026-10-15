@@ -28,8 +28,11 @@ def cache_identity(spec: SearchSpec, mode: SearchMode) -> tuple[str, str]:
     if mode == "stay":
         namespace = "hotel"
         fields = (
-            "hotel-v1",
+            "hotel-v2",
             spec.fixture.city.casefold(),
+            spec.fixture.venue_coordinates.model_dump(mode="json")
+            if spec.fixture.venue_coordinates
+            else None,
             *common,
             spec.budget_tier,
             spec.private_room,

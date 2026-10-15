@@ -10,8 +10,9 @@
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1",
-      "venue_location": "Décines-Charpieu, France"
+      "catalog_version": "2026-10-15.away.2",
+      "venue_location": "Décines-Charpieu, France",
+      "venue_coordinates": {"latitude": 45.765224, "longitude": 4.982131}
     },
     {
       "id": "uel-2026-besiktas-away",
@@ -23,8 +24,9 @@
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1",
-      "venue_location": "Istanbul, Türkiye"
+      "catalog_version": "2026-10-15.away.2",
+      "venue_location": "Istanbul, Türkiye",
+      "venue_coordinates": {"latitude": 41.039167, "longitude": 28.994167}
     },
     {
       "id": "uel-2026-jagiellonia-away",
@@ -36,8 +38,9 @@
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1",
-      "venue_location": "Białystok, Poland"
+      "catalog_version": "2026-10-15.away.2",
+      "venue_location": "Białystok, Poland",
+      "venue_coordinates": {"latitude": 53.105611, "longitude": 23.148889}
     },
     {
       "id": "uel-2026-salzburg-away",
@@ -49,8 +52,9 @@
       "venue_status": "provisional",
       "source_url": "https://www.uefa.com/uefaeuropaleague/clubs/52916--crystal-palace/matches/",
       "source_checked_at": "2026-10-05T00:00:00Z",
-      "catalog_version": "2026-10-05.away.1",
-      "venue_location": "Kleßheim, Austria"
+      "catalog_version": "2026-10-15.away.2",
+      "venue_location": "Kleßheim, Austria",
+      "venue_coordinates": {"latitude": 47.81625, "longitude": 12.998222}
     }
   ],
   "routes": [
