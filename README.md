@@ -81,13 +81,14 @@ worker CPU alone, must be checked before adding slots.
 | Queue-driven scaling, one to three shared workers | $12–$36 plus controller | Better signal, but needs custom scaling and alert infrastructure |
 
 The deployed worker uses Temporal Worker Deployment `cpfc-trip` with a full commit SHA build ID
-and pinned Workflows. Build each new worker version from an immutable release branch, start its
-replicas, verify pollers, then set it Current in Temporal. Keep at least one old-build replica
-until `temporal worker deployment describe-version` reports it drained. The first cutover from
-unversioned workers may replace them directly only after verifying zero running Eagles Away
-Workflows. DigitalOcean must allow 180 seconds after SIGTERM; the SDK drains for up to 150
-seconds. Do not reuse a build ID for different code. The live app spec is ignored because it
-contains secrets; never paste it into logs or commit it.
+and pinned Workflows. DigitalOcean components read the moved repository's `main` branch through
+a Git clone source, so a push alone does not deploy. For each manual source update, set a new
+worker's build ID to the exact `main` commit being built, start its replicas alongside the old
+build, verify pollers, then set it Current in Temporal. Keep at least one old-build replica
+until `temporal worker deployment describe-version` reports it drained. Never rebuild a worker
+from a later `main` commit under an existing build ID. DigitalOcean must allow 180 seconds after
+SIGTERM; the SDK drains for up to 150 seconds. The live app spec is ignored because it contains
+secrets; never paste it into logs or commit it.
 
 With a Temporal CLI profile for the Eagles Away namespace, the promotion checks are:
 

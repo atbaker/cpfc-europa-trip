@@ -14,6 +14,6 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
       <span className="sponsor">Powered by <Image className="sponsor-logo" src="/temporal-logo.webp" alt="Temporal" width={105} height={31} priority /></span>
     </header>
     <main>{children}</main>
-    <footer><span>Your club. Your next away day.</span><Link href="/privacy/">Privacy & your data</Link><span>Travel planning only · Match tickets not included</span><AnalyticsConsent /></footer>
+    <footer><span>Your club. Your next away day.</span><span><Link href="/privacy/">Privacy & your data</Link> · <a href="https://github.com/temporal-community/Eagles-Away">GitHub</a></span><span>Travel planning only · Match tickets not included</span><AnalyticsConsent /></footer>
   </body></html>;
 }
