@@ -2,6 +2,46 @@
 
 This is a dated discovery record for the first cloud deployment. It supplements the [approved MVP architecture](mvp-plan.md#infrastructure-and-deployment) and the [engineering handoff](2026-09-30-engineering-handoff.md). No production resources or DNS records were changed during the initial review; later updates are recorded below.
 
+## 15 October 2026 — current operator notes
+
+These notes supersede the private-preview and GCP deployment steps below. The public site is
+`https://eaglesaway.com/`. DigitalOcean App Platform app
+`373808be-b5ec-4d20-b7fc-d8dbe906aff9` runs the web service, migration and retention jobs,
+and two Temporal worker replicas, backed by PostgreSQL. Source is
+[`temporal-community/Eagles-Away`](https://github.com/temporal-community/Eagles-Away) on `main`.
+DigitalOcean uses a Git clone source: pushing a commit does **not** start a deployment.
+
+The hosted Temporal queue is `eagles-away-do-preview-v1` (the fresh local checkout defaults to
+`cpfc-trip-v3`). The Worker Deployment is `cpfc-trip`; pinned workers use the full source commit
+SHA as an immutable build ID. For a code release, build a new worker version from the exact
+commit, start it beside the old version, confirm Workflow and Activity pollers on the hosted
+queue, and promote the new version to Current. Keep an old-build replica until Temporal reports
+that version drained. Never rebuild later source under an existing build ID. After release,
+check both queue types for live pollers and backlog age, DigitalOcean worker health, and the
+public `/healthz` endpoint. See the 14 October [worker rollout record](../blog.md#14-october-2026--worker-resilience-and-manual-email)
+for the tested scale-out/scale-in behavior and remaining limits.
+
+With a Temporal CLI profile for the hosted namespace, use the **hosted** queue for release checks:
+
+```bash
+temporal worker deployment describe --name cpfc-trip
+temporal task-queue describe --task-queue eagles-away-do-preview-v1 --task-queue-type activity --select-build-id <new-build-id>
+temporal task-queue describe --task-queue eagles-away-do-preview-v1 --task-queue-type workflow --select-build-id <new-build-id>
+temporal worker deployment set-current-version --deployment-name cpfc-trip --build-id <new-build-id>
+temporal worker deployment describe-version --deployment-name cpfc-trip --build-id <old-build-id>
+```
+
+Keep the two-worker, eight-Activity-slots-each baseline until measured queue delay warrants a
+change. Investigate if the oldest task waits over five seconds or p95 Schedule-to-Start exceeds
+two seconds for ten minutes; check provider 429s before adding capacity. The worker's 150-second
+SDK drain needs a 180-second DigitalOcean termination grace.
+
+The live app spec and `.env` are ignored because they contain secrets. Use DigitalOcean runtime
+secrets for SearchApi, Gemini, Temporal Cloud, Resend and session encryption; do not commit or
+print those values. The public deployment sends email only after a visitor requests a completed
+itinerary; an unsuccessful search sends no email. Local setup stays in the [README](../README.md);
+new clones default to recorded results and preview email.
+
 ## 8 October 2026 — preview origin correction
 
 Making `eaglesaway.com` the DigitalOcean primary domain changed `${APP_URL}`, so POST requests from the generated `ondigitalocean.app` preview URL returned 403. The API now accepts an explicit, comma-separated `ADDITIONAL_FRONTEND_ORIGINS` allowlist alongside `FRONTEND_ORIGIN`. The hosted spec adds only `https://eagles-away-preview-ifemt.ondigitalocean.app` as an additional origin; unrelated origins still return 403. A regression test covers both trusted origins and rejection of an unrelated origin. The full check passed with 91 Python tests, two PostgreSQL tests skipped by their fixture, and 19 frontend tests. A pre-existing frontend test cleanup issue surfaced in the first check and was corrected before the passing run. A configuration-only DigitalOcean update reused old commit `a1dcaf8`; redeploying with `--update-sources` built commit `5c0c17a`. Deployment `36394aef-26bc-4f1d-b002-fc8e6004e2bc` reached `ACTIVE`. Hosted checks returned 200 for health and authenticated home, 401 for anonymous home, 422 for deliberately invalid POSTs from both trusted origins, and 403 for an unrelated origin. The 422 responses establish that the origin guard allowed those requests; valid trip creation was not retested. Public apex DNS still had no address at verification.
