@@ -15,7 +15,7 @@ from test_api_email import frozen
 
 from cpfc_trip.api import create_app
 from cpfc_trip.domain import CreateSession
-from cpfc_trip.persistence.models import DeliveryRow, WebhookRow
+from cpfc_trip.persistence.models import DeliveryRow, SessionRow, WebhookRow
 from cpfc_trip.resend import send
 from cpfc_trip.temporal.activities import DeliveryActivities
 
@@ -56,6 +56,9 @@ async def test_ambiguous_send_reuses_frozen_body_sender_and_key(repository, sess
         route.side_effect = httpx.ReadTimeout("private network diagnostics")
         with pytest.raises(ApplicationError, match="outcome unknown"):
             await ActivityEnvironment().run(deliver, snapshot)
+        async with repository.sessions() as db:
+            session = await db.get(SessionRow, str(data.public_session_id))
+            assert session is not None and session.encrypted_email
         original = route.calls[0].request
         repository.settings.resend_from_email = "New name <changed@send.eaglesaway.com>"
         route.side_effect = None
@@ -67,6 +70,13 @@ async def test_ambiguous_send_reuses_frozen_body_sender_and_key(repository, sess
         )
         assert await ActivityEnvironment().run(deliver, snapshot) == "resend-test-id"
         assert route.call_count == 2
+        async with repository.sessions() as db:
+            session = await db.get(SessionRow, str(data.public_session_id))
+            delivery = await db.get(DeliveryRow, str(data.public_session_id))
+            assert session is not None
+            assert session.encrypted_email == b""
+            assert session.email_hash == ""
+            assert delivery is not None and "to" not in delivery.payload
 
 
 async def test_webhook_signatures_order_duplicates_and_lost_receipt(repository, session_input):

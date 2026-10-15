@@ -1,2 +1,15 @@
 import { PlannerForm } from "../components/planner-form";
-export default function Home() { return <div className="home"><section className="intro"><p className="eyebrow">EUROPEAN AWAY DAYS · 2026 / 27</p><h1>Follow Palace.<br /><em>Make a trip of it.</em></h1><p className="lead">From London to the away end. Compare the journey, find a place to stay, and put your matchday plans together.</p><div className="steps"><span>01 <b>Pick your matches</b></span><span>02 <b>Explore your options</b></span><span>03 <b>Take your plan with you</b></span></div><p className="fine">We help you plan. You book directly with travel providers.<br />Prices can change, and every trip starts at a London departure hub.</p></section><PlannerForm /></div>; }
+
+export default function Home() {
+  return <div className="home-page">
+    <div className="home">
+      <section className="intro">
+        <p className="eyebrow">EUROPEAN AWAY DAYS · 2026 / 27</p>
+        <h1>Follow Palace.<br /><em>Make a trip of it.</em></h1>
+        <p className="lead">Choose an away match and a UK starting city. We’ll help you compare the journey and find a place to stay.</p>
+        <p className="intro-note">A practical trip plan with real prices where available. You book directly with travel providers.</p>
+      </section>
+      <PlannerForm />
+    </div>
+  </div>;
+}

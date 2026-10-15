@@ -6,8 +6,7 @@ export type Itinerary = NonNullable<Snapshot["itinerary"]>;
 export type Trip = Itinerary["trips"][number];
 export type Leg = NonNullable<Trip["journey"]>["outbound"][number];
 export type Stay = NonNullable<Trip["stay"]>;
-export type Quote = NonNullable<Leg["quote"]>;
-export const API = process.env.NEXT_PUBLIC_API_ORIGIN ?? "";
+const API = process.env.NEXT_PUBLIC_API_ORIGIN ?? "";
 
 export function londonDayBoundary(day: string, end = false): string {
   const offset = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", timeZoneName: "shortOffset" })
@@ -34,7 +33,7 @@ export function newer(current: Snapshot | null, incoming: Snapshot | null): Snap
   return incoming && (!current || incoming.state_revision > current.state_revision) ? incoming : current;
 }
 export function terminal(snapshot: Snapshot | null): boolean {
-  return !!snapshot && ["emailed", "failed", "email_failed"].includes(snapshot.phase);
+  return !!snapshot && ["emailed", "closed", "failed", "email_failed"].includes(snapshot.phase);
 }
 export function formatMoney(money: { minor_units: number; currency: string }): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: money.currency,

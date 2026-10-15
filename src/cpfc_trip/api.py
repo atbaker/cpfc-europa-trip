@@ -1,6 +1,9 @@
 """JSON-only API. All active session reads Query Temporal directly."""
 
+import base64
+import binascii
 import re
+import secrets
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -13,6 +16,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +29,7 @@ from temporalio.service import RPCError
 from cpfc_trip.catalog import load_catalog
 from cpfc_trip.config import Settings
 from cpfc_trip.domain import Command, CreateSession, MessageCommand, Receipt, Snapshot
+from cpfc_trip.origins import LIVE_ORIGINS, UK_RAIL
 from cpfc_trip.persistence.database import engine
 from cpfc_trip.persistence.models import DeliveryRow, WebhookRow
 from cpfc_trip.persistence.repository import Repository
@@ -86,10 +91,14 @@ def create_app(
             await db.dispose()
 
     app = FastAPI(title="Eagles Away", version="0.1.0", lifespan=lifespan)
-    if config.app_env != "production":
+    allowed_frontend_origins = {config.frontend_origin}
+    allowed_frontend_origins.update(
+        origin.strip() for origin in config.additional_frontend_origins.split(",") if origin.strip()
+    )
+    if config.app_env in {"development", "test"}:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[config.frontend_origin],
+            allow_origins=sorted(allowed_frontend_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST"],
             allow_headers=["Content-Type", "X-Submission-Token"],
@@ -97,9 +106,37 @@ def create_app(
 
     @app.middleware("http")
     async def protect(request: Request, call_next: Any) -> Response:
-        if request.method == "POST" and request.url.path.startswith("/api/"):
-            if request.headers.get("origin") != config.frontend_origin:
-                return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
+        if (
+            config.app_env == "preview"
+            and config.preview_access_required
+            and request.url.path != "/healthz"
+        ):
+            encoded = request.headers.get("authorization", "").removeprefix("Basic ")
+            try:
+                decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+                username, separator, password = decoded.partition(":")
+            except (binascii.Error, UnicodeDecodeError):
+                username, separator, password = "", "", ""
+            if (
+                not separator
+                or not secrets.compare_digest(username.encode(), config.preview_username.encode())
+                or not secrets.compare_digest(
+                    password.encode(), config.preview_password.get_secret_value().encode()
+                )
+            ):
+                return Response(
+                    status_code=401,
+                    headers={
+                        "WWW-Authenticate": 'Basic realm="Eagles Away preview"',
+                        "Cache-Control": "no-store",
+                    },
+                )
+        if (
+            request.method == "POST"
+            and request.url.path.startswith("/api/")
+            and request.headers.get("origin") not in allowed_frontend_origins
+        ):
+            return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         if int(request.headers.get("content-length", "0")) > 32000:
             return JSONResponse({"detail": "Request is too large"}, status_code=413)
         response: Response = await call_next(request)
@@ -143,6 +180,8 @@ def create_app(
         return {
             "fixtures": fixtures,
             "origin": "London",
+            "origin_cities": LIVE_ORIGINS,
+            "rail_cities": ["London", *(city for city in sorted(UK_RAIL) if city in LIVE_ORIGINS)],
             "development_mode": config.planner_mode == "recorded",
         }
 
@@ -182,7 +221,7 @@ def create_app(
             f"cpfc_{data.public_session_id}",
             token,
             httponly=True,
-            secure=config.app_env == "production",
+            secure=config.app_env in {"preview", "production"},
             samesite="lax",
             path=f"/api/sessions/{data.public_session_id}",
         )
@@ -299,6 +338,9 @@ def create_app(
         except Exception:
             raise HTTPException(503, "Dependencies are not ready") from None
         return {"ok": True}
+
+    if config.static_export_dir:
+        app.mount("/", StaticFiles(directory=config.static_export_dir, html=True), name="frontend")
 
     return app
 

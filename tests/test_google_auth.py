@@ -3,7 +3,8 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
+from pydantic_ai.providers.google import GoogleProvider
 
 from cpfc_trip.config import Settings
 from cpfc_trip.planner.google_auth import credentials
@@ -69,3 +70,25 @@ def test_auth_errors_do_not_expose_credential_output(monkeypatch):
 def test_adc_does_not_call_gcloud(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: pytest.fail("Unexpected gcloud call"))
     assert credentials(Settings(_env_file=None, google_auth_mode="adc")) is None
+
+
+def test_gemini_api_key_configures_non_gcp_worker() -> None:
+    """A DigitalOcean worker can use Gemini without local gcloud or a GCP service account."""
+    from cpfc_trip.planner.agent import model_provider
+
+    settings = Settings(
+        _env_file=None,
+        app_env="preview",
+        preview_username="reviewer",
+        preview_password="preview-password",
+        google_auth_mode="api_key",
+        gemini_api_key=SecretStr("test-api-key"),
+        google_cloud_project="",
+    )
+    assert isinstance(model_provider(settings), GoogleProvider)
+    with pytest.raises(ValidationError, match="Gemini API key"):
+        Settings(
+            _env_file=None,
+            google_auth_mode="api_key",
+            gemini_api_key=SecretStr(""),
+        )

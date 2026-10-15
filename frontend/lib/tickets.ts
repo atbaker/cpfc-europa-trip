@@ -1,0 +1,1 @@
+export const CPFC_TICKET_URL = "https://www.eticketing.co.uk/cpfc/Events?preFilter=9&preFilterName=3.+Away+Matches+%2526+Coach+Travel&utm_source=website&utm_medium=referral&utm_campaign=WebStoryTickets021026";

@@ -1,10 +1,18 @@
+import asyncio
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from cpfc_trip.domain import SearchSpec
+from cpfc_trip.origins import routes_for_origin
 from cpfc_trip.planner.agent import Intent
 from cpfc_trip.planner.planning import enumerate_specs, feasible, rank
-from cpfc_trip.planner.providers.searchapi import connect_rail, normalize_trains
+from cpfc_trip.planner.providers.searchapi import (
+    connect_rail,
+    london_connection,
+    normalize_trains,
+    search_trains,
+)
 from cpfc_trip.planner.recorded import sample
 
 
@@ -30,6 +38,102 @@ def test_live_station_contract_and_cross_paris_buffer():
     block = raw["London-Paris"]
     block["train_results"]["trains"][0]["instructions"][0]["arrive_at"]["place"] = "Lille Europe"
     assert not normalize_trains(block, "London", "Paris", "2026-10-14", datetime.now(UTC))
+
+
+async def test_manchester_rail_connects_to_reviewed_lyon_route(session_input):
+    raw = await asyncio.to_thread(lambda: json.loads(Path("tests/data/lyon-rail.json").read_text()))
+
+    def domestic(origin, destination, day, departure, arrival, from_station, to_station):
+        return {
+            "train_results": {
+                "origin": origin,
+                "destination": destination,
+                "date": day,
+                "trains": [
+                    {
+                        "transfers": 0,
+                        "time_window": {"depart_at_iso": departure, "arrive_at_iso": arrival},
+                        "instructions": [
+                            {
+                                "depart_from": {"place": from_station, "at_iso": departure},
+                                "arrive_at": {"place": to_station, "at_iso": arrival},
+                                "service_provider": {"name": "Example rail"},
+                            }
+                        ],
+                        "buy_ticket": {
+                            "offers": [
+                                {
+                                    "source": "Omio",
+                                    "link": "https://www.omio.com/test",
+                                    "extracted_price": 45,
+                                    "currency": "GBP",
+                                }
+                            ]
+                        },
+                    }
+                ],
+            }
+        }
+
+    raw["Manchester-London"] = domestic(
+        "Manchester",
+        "London",
+        "2026-10-14",
+        "2026-10-14T05:00:00+01:00",
+        "2026-10-14T07:20:00+01:00",
+        "Manchester Piccadilly",
+        "Euston",
+    )
+    raw["London-Manchester"] = domestic(
+        "London",
+        "Manchester",
+        "2026-10-16",
+        "2026-10-16T17:00:00+01:00",
+        "2026-10-16T19:20:00+01:00",
+        "Euston",
+        "Manchester Piccadilly",
+    )
+
+    class FakeApi:
+        calls = 0
+
+        async def get(self, params):
+            self.calls += 1
+            query = params["q"]
+            return next(
+                result
+                for key, result in raw.items()
+                if query.startswith(f"trains from {key.replace('-', ' to ')} on")
+            )
+
+    route = next(
+        r for r in routes_for_origin(session_input.routes, "Manchester") if r.mode == "rail"
+    )
+    spec = SearchSpec(
+        fixture=session_input.fixtures[0],
+        route=route,
+        party=session_input.brief.travellers,
+        outbound_date=date(2026, 10, 14),
+        return_date=date(2026, 10, 16),
+    )
+    result = await search_trains(FakeApi(), spec)
+    assert result.calls == 6
+    assert result.journeys
+    journey = result.journeys[0]
+    assert len(journey.outbound) == len(journey.inbound) == 3
+    assert journey.outbound[0].origin == "Manchester Piccadilly"
+    assert journey.inbound[-1].destination == "Manchester Piccadilly"
+    assert journey.outbound[0].quote.amount.minor_units == 4500
+    tight = journey.outbound[0].model_copy(
+        update={"arrives_at": journey.outbound[1].departs_at - timedelta(minutes=90)}
+    )
+    assert not london_connection(tight, journey.outbound[1], 180)
+    raw["Manchester-London"]["train_results"]["trains"][0]["instructions"][0]["arrive_at"][
+        "place"
+    ] = "Waterloo"
+    assert not normalize_trains(
+        raw["Manchester-London"], "Manchester", "London", "2026-10-14", datetime.now(UTC)
+    )
 
 
 def test_lyon_supported_hours_and_hard_mode(session_input):

@@ -5,6 +5,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from cpfc_trip.domain import Party
 
 ALLOWED = {
+    "www.eticketing.co.uk",
     "www.olvallee.fr",
     "www.rhonexpress.fr",
     "www.google.com",
@@ -31,7 +32,9 @@ def safe_url(value: str) -> str | None:
             return None
         if u.port not in (None, 443) or any(ord(c) < 32 for c in value):
             return None
-        if u.hostname == "www.google.com" and not u.path.startswith("/travel/flights"):
+        if u.hostname == "www.google.com" and not (
+            u.path.startswith("/travel/flights") or u.path == "/maps/dir/"
+        ):
             return None
         return value
     except ValueError:
@@ -39,7 +42,7 @@ def safe_url(value: str) -> str | None:
 
 
 def flight_url(value: str) -> str | None:
-    if not safe_url(value) or urlsplit(value).hostname != "www.google.com":
+    if not safe_url(value) or not urlsplit(value).path.startswith("/travel/flights"):
         return None
     u = urlsplit(value)
     params = [

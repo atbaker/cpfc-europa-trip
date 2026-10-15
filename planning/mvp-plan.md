@@ -1,6 +1,22 @@
 # Eagles Away — MVP plan
 
 - Status: approved rebuild plan; SearchApi selected for flight, hotel, and train results
+- Hotel shortlist update: 15 October 2026; keep SearchApi's first 40 price-sorted properties and the existing two detailed property checks. Within those 40, rank by stay price, review/room quality and approximate straight-line distance from the listed stadium, with proximity weighted more for value and comfort than budget. Missing hotel coordinates receive the maximum distance penalty; older fixtures without venue coordinates retain the prior ranking. This is a location preference, not a travel-time or walkability claim. Stadium points come from the linked [Wikidata entries for Lyon](https://www.wikidata.org/wiki/Q21914297), [Istanbul](https://www.wikidata.org/wiki/Q14914703), [Białystok](https://www.wikidata.org/wiki/Q2470765) and [Salzburg](https://www.wikidata.org/wiki/Q206135); venues remain provisional. The hotel cache version changes so older shortlists are not reused.
+- Form simplification update: 14 October 2026; remove the optional “Anything else?” free-text field from new trip briefs because it can introduce unsupported constraints and lead to failed searches. New website submissions send an empty `extra_instructions` value. Keep the backend field and initial workflow handling for sessions created before the change. This supersedes the optional-instructions input below.
+- Worker and email update: 14 October 2026; launch with two fixed DigitalOcean shared-CPU planner replicas, eight Activity slots each, 150-second SDK shutdown drain and 180-second platform grace. Keep the total 16 slots while measuring Temporal pollers, queue wait and provider throttling; add capacity only on sustained queue pressure. Search Activities heartbeat, retry once after worker loss, and reserve at most 16 SearchApi calls per search across two eight-call attempts. Pinned Worker Deployment versions use immutable build IDs and retain old-build pollers until drained on later releases. The first unversioned cutover may swap directly after confirming no running Eagles Away sessions. Email is manual only: the 10-minute inactivity send is removed, and the 30-minute session limit closes without email. This supersedes historical automatic-email and one-worker launch text below.
+- Ticket link update: 14 October 2026; link CPFC members to the supplied official away-ticket listing from the form, match card (including journey previews), and HTML/plain-text itinerary email. Match tickets remain outside trip pricing and planning; the app makes no ticket-availability claim.
+- Airport preference fallback update: 14 October 2026; if a complete itinerary cannot meet an airport preference from extra instructions, re-evaluate already retrieved travel evidence without that airport restriction. A verified fallback names the preferred and actual airports in the plan summary. This does not loosen dates, match timing, transport mode or room requirements, add paid provider requests, or claim that unreturned airport options do not exist. When no trip is verified, the page distinguishes missing return travel, unmatched stays and rejected timing/connection evidence where observed; failed sessions still send no email.
+- Email behavior update: 14 October 2026; when no itinerary can be committed, end the session with an on-page explanation and do not send an email. Successful itinerary emails are unchanged. A Temporal patch preserves replay of older histories that scheduled a failure notice; the snapshot schema keeps `failure_notice` only for those sessions. This supersedes the older failure-notice requirements below.
+- Departure scope update: 8 October 2026; keep one fixed dropdown for all matches with Belfast, Birmingham, Bristol, Edinburgh, Glasgow, Liverpool, London, Manchester and Newcastle. Their supported airports each handled at least five million passengers in the UK CAA's [April 2024–March 2025 airport table](https://www.caa.co.uk/Documents/Download/23997/f0ce4b8e-b2f8-4552-b794-4f36fd4afe9a/17096). The cutoff is a practical international-connectivity proxy, not proof of a viable dated route to each fixture. The app searches nonstop and suitable one-stop flights, still subject to provider results and feasibility rules. New live submissions from other cities are rejected; existing sessions retain their recorded origins. This supersedes the broader 5 October departure update below.
+- Email copy update: 8 October 2026; successful itinerary emails render the saved plan's caveats once in both HTML and plain text. The email template no longer adds a second price/ticket/departure-hub disclaimer. Failed-search notices then retained a separate no-booking explanation; the 14 October decision above ends new failure notices.
+- Form catalog update: 8 October 2026; the static home page includes the reviewed live fixtures and UK city/rail choices at build time so the form can render before `/api/catalog` responds. A generated JSON snapshot comes from the backend catalog and origins, with a check that fails if it is stale. The runtime catalog request still updates availability and development-mode behavior, while preserving a valid visitor selection. Past fixtures are removed after hydration and the API remains authoritative at submission.
+- Plan-page update: 8 October 2026; remove the user-facing follow-up conversation because it has not produced useful revisions in preview testing. The brief, progress, saved itinerary and email action remain. Existing backend message handling and stored transcripts remain for compatibility with already-running sessions; the website no longer sends new messages. This supersedes the earlier follow-up UI scope below.
+- Deployment update: 7 October 2026; the owner changed the first hosting target from GCP to DigitalOcean because GCP billing access remains blocked. The private preview will use App Platform in Frankfurt with a web service, continuously running Temporal Cloud worker, PostgreSQL and a migration job. The generated DigitalOcean URL will require preview access credentials; `eaglesaway.com` DNS stays unchanged until the hosted application is verified. DigitalOcean CLI access and a non-local Gemini credential are open prerequisites. The older GCP infrastructure sections below are historical design, not the current preview target.
+- Flight coverage update: 7 October 2026; each dated flight search tries a nonstop round trip first, then a provider-selected one-stop round trip only when no complete nonstop option was verified. One-stop results require a matching connection airport, a provider layover consistent with endpoint times and segment durations, and a 60–480 minute connection; the stop is shown explicitly. Each flight Activity remains bounded to eight SearchApi calls and the existing deadline. The previously failed Manchester–Salzburg 27–29 January 2027 case completed in a local live session with a Frankfurt connection and a stay; this does not guarantee future availability or payable prices. The original failed session remains unchanged.
+- Search presentation update: 7 October 2026; keep SearchApi for dated flights, hotels and reviewed rail. An initial brief with no free-text instructions uses its typed form values directly, avoiding a Gemini request before travel search. Free-text briefs and follow-ups still use Gemini. The workflow exposes the first feasible dated return journey as a temporary, explicitly incomplete preview while accommodation is pending, then continues comparison for no more than 30 seconds after that journey appears (subject to the existing turn deadline and request caps). Only a complete trip is committed or emailed. Completed plans include Google Maps transit links from the selected UK city centre to the actual departure point and from the destination arrival point to the selected stay. These are fresh, editable directions links, not stored Maps schedules or fares. No Maps Routes API key is configured, so in-page transfer times and changes remain unverified; Maps integration can be revisited after the first-result speed is measured.
+- Search cache update: 5 October 2026; workers share normalized successful transport and hotel results in PostgreSQL for 24 hours. Transport keys include fixture, route/city, dates, mode and party; hotel keys include city, dates, party size and room/budget preferences. Empty or failed searches are not cached. Reuse preserves the original quote observation time and incurs zero new provider calls; cache database errors fall through to a live search. Saved itinerary snapshots remain separate. This supersedes the older no-separate-quote-cache statement below for search results only.
+- Departure update: 5 October 2026; a dropdown of supported UK airport cities replaces the fixed London origin. London remains the default. Reviewed direct UK rail services from Birmingham, Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle can connect via London and Paris for Lyon; other cities offer flights only. Edinburgh rail may arrive after 23:00 and requires hotel check-in confirmation. This supersedes older London-only statements below. Dated provider results and three-hour London/Paris buffers are required; availability is never guaranteed.
+- Fixture update: 5 October 2026; the new brief form selects exactly one of the four away matches. The stored Brief schema continues to read older multi-match Temporal sessions. Live flight routes are enabled for Istanbul (IST) and Salzburg (SZG); Białystok uses a verified WAW flight joined to dated direct Warsaw Central–Zielone Wzgórza trains, with a minimum three-hour airport/station transfer in both directions. Provider train results currently omit fares and selected-service booking links for this route, so that portion stays unpriced and links to the operator. SAW and MUC candidates remain disabled. Venue details are provisional; live availability is checked per request. This supersedes older Lyon-only and multi-select implementation notes below.
 - Implementation: [local rebuild checkpoint](2026-09-06-implementation-checkpoint.md); public MVP still in progress
 - Repository reset: 6 September 2026; initial implementation removed, planning and scripts retained
 - Price storage: ordinary durable snapshots in itinerary state; no separate quote cache or expiring handles
@@ -15,7 +31,7 @@
 
 ## Recommendation in one page
 
-Build a mobile-first, public travel-planning service for Palace supporters departing from London. A supporter completes a short form, a bounded durable planning session compares live travel results within a small fixture-specific route catalog, and the UI renders a structured draft itinerary. The supporter can ask follow-up questions or request changes in a short chat. Send the latest committed itinerary unchanged when requested or after ten minutes of meaningful inactivity. Session limits also finalize the latest valid result; if planning cannot produce one within its deadline, send one honest failure notice.
+Build a mobile-first, public travel-planning service for Palace supporters departing from London. A supporter completes a short form, a bounded durable planning session compares live travel results within a small fixture-specific route catalog, and the UI renders a structured draft itinerary. The supporter can ask follow-up questions or request changes in a short chat. Send the latest committed itinerary unchanged when requested or after ten minutes of meaningful inactivity. Session limits also finalize the latest valid result; if planning cannot produce one within its deadline, finish with an on-page explanation and no email.
 
 The MVP should make seven deliberate choices:
 
@@ -40,7 +56,7 @@ The SearchApi feasibility spike is successful under the agreed external-search h
 | Travel data | SearchApi: `google_flights`, `booking` / `booking_property`, and Google Search `train_results`; replaceable adapters |
 | Provider spike | Successful for initial provider selection; wider coverage, price handling, and failure cases belong to integration/readiness work |
 | Launch target | Public self-serve travel planning with automated research and clearly labeled coverage gaps |
-| Email | Send the latest committed itinerary unchanged, with existing prices/timestamps and direct links; one failure notice if no valid result can be produced; no pre-email research pass |
+| Email | Send the latest committed itinerary unchanged, with existing prices/timestamps and direct links; send nothing if no valid result can be produced; no pre-email research pass |
 | Timeout | Ten minutes of meaningful inactivity; three-minute initial planning deadline; 90-second follow-up deadline; 30-minute interaction window and at most ten follow-ups |
 | Budget | Relative `£ / ££ / £££` preference with plain-language descriptions, not a hard spending cap |
 | Branding | Make Temporal sponsorship clear in the page chrome and email |
@@ -119,7 +135,7 @@ The form is the hero. It should feel like a trip brief, not a signup flow.
 | --- | --- | --- |
 | Team | Hidden or fixed to Crystal Palace for MVP | The model still stores `team_id`; expose a selector when another team is enabled |
 | Away matches | Card-style checkboxes; preselect the next upcoming away fixture | Users can choose one or several without knowing opponent IDs |
-| Starting from | Fixed `London`; list eligible London airports and St Pancras | Keeps the route catalog small; supporters arrange travel to the departure hub themselves |
+| Starting from | Choose a supported UK departure city; `London` is prefilled | Resolve to reviewed airport codes and available direct rail gateways. Supporters arrange travel to the departure hub themselves |
 | Travellers | `1 adult`; compact stepper; reveal child ages only when needed | Prices and room occupancy depend on party composition |
 | Flexibility | `A day either side` | Keep dates simple; advanced controls can set exact earliest departure/latest return per fixture |
 | Budget style | `££ Best value` | The default balances time, risk, and total cost |
@@ -201,7 +217,7 @@ refresh-on-click endpoint. Private itinerary access links remain separately auth
 
 Show the remaining follow-up allowance as it becomes relevant. At the interaction/turn limit,
 finalize the latest completed plan. If initial planning fails or times out without a valid
-result, send a single concise failure notice instead of waiting indefinitely or inventing a trip.
+result, show a concise failure on the page without sending an email or inventing a trip.
 
 ## Making the budget choice genuinely useful
 
@@ -399,7 +415,7 @@ State transitions:
 
 `CREATED → RESEARCHING → DRAFT_READY ↔ REVISING → FINALIZING → EMAILED`
 
-A partial provider failure should produce a clearly labeled partial draft when enough evidence remains. If no valid itinerary can be produced by the initial deadline, send one failure notice and finish in `FAILED`; its `email_status` still records whether that notice was sent. `EMAIL_FAILED` means the final plan/notice could not be submitted successfully within the send policy. Research uses SearchApi and the catalog; explicit missing-evidence fallbacks never wait for another acquisition path.
+A partial provider failure should produce a clearly labeled partial draft when enough evidence remains. If no valid itinerary can be produced by the initial deadline, finish in `FAILED` with `email_status=not_requested` and no delivery Activity. `EMAIL_FAILED` means a valid plan could not be submitted successfully within the send policy. Research uses SearchApi and the catalog; explicit missing-evidence fallbacks never wait for another acquisition path.
 
 The authoritative Workflow state contains:
 
@@ -436,8 +452,8 @@ The initial POST supplies a client-generated submission ID, so a double-tap or m
 7. Post-validate and retry only failed portions while the initial deadline and request budget permit.
 8. Commit the validated itinerary and completed assistant message atomically, then set `DRAFT_READY`.
 
-If the initial attempt cannot produce any valid itinerary by its deadline, finalize a failure
-notice. A partial plan must name the missing fixtures/legs and cannot label unevidenced travel
+If the initial attempt cannot produce any valid itinerary by its deadline, show the failure
+on the page without email. A partial plan must name the missing fixtures/legs and cannot label unevidenced travel
 as feasible. Use one Workflow for the selected fixtures, with capped parallel Activities.
 
 ### Bounded sessions and work budgets
@@ -475,7 +491,7 @@ The 30-minute limit bounds interactive planning, not durable email retries. Do n
 a Workflow execution timeout that can kill finalization. Keep the Workflow alive through the
 bounded send/reconciliation policy even after input and planning have closed.
 
-### Inactivity timer and exactly-one email
+### Inactivity timer and at-most-one itinerary email
 
 Use Temporal's [Updatable Timer pattern](https://docs.temporal.io/design-patterns/updatable-timer)
 with deterministic Workflow time. Submission and newly accepted messages count as interaction;
@@ -483,10 +499,10 @@ polling, page focus, reading, and duplicate requests do not.
 
 - Manual send and inactivity close input and stop accepting new turns. If a turn was already accepted, resolve it within its existing deadline, then freeze the latest committed revision.
 - The fixed interaction deadline takes precedence: cancel unfinished planning and use the latest valid committed plan. At the turn/session-request limit, finalize after resolving the last permitted turn within its deadline.
-- Initial planning failure/deadline with no valid draft produces one failure notice. Do not wait indefinitely for a draft or claim that empty results prove no travel is possible.
-- All paths enter the same `FINALIZING` transition once and store a finalization reason, frozen itinerary revision (if present), and email kind (`itinerary` or `failure_notice`). Later finalize requests are no-ops.
+- Initial planning failure/deadline with no valid draft ends in `FAILED` without email. Do not wait indefinitely for a draft or claim that empty results prove no travel is possible.
+- Successful planning enters `FINALIZING` once and stores a finalization reason, frozen itinerary revision, and itinerary email kind. Failed planning stores the reason but leaves email status `not_requested`. Later finalize requests are no-ops.
 - Render the frozen result and original price timestamps. Finalization must call no travel/search/model tools and must not alter itinerary selections.
-- Send through an idempotent Activity using a stable session-level key and a unique email-delivery record. Successful itinerary mail ends in `EMAILED`; a sent failure notice ends in `FAILED`; exhausted/ambiguous send handling uses `EMAIL_FAILED` and never authorizes a second message.
+- Send a valid itinerary through an idempotent Activity using a stable session-level key and a unique email-delivery record. Successful itinerary mail ends in `EMAILED`; no-result planning ends in `FAILED` without calling that Activity. Exhausted/ambiguous send handling uses `EMAIL_FAILED` and never authorizes a second message.
 
 Use Resend's [`Idempotency-Key`](https://resend.com/docs/dashboard/emails/idempotency-keys),
 for example `final-itinerary/{session_id}`. Keep the frozen email payload unchanged across
@@ -533,8 +549,7 @@ Use the current capability-based integration documented by [Pydantic AI](https:/
 
 - `Agent(..., capabilities=[TemporalDurability()])` with ordinary durable `Agent.run()` calls that return completed output;
 - `PydanticAIWorkflow` with stable `__pydantic_ai_agents__`;
-- `PydanticAIPlugin()` on worker and FastAPI Temporal clients; and
-- `LogfirePlugin()` with explicit PII scrubbing.
+- `PydanticAIPlugin()` on worker and FastAPI Temporal clients.
 
 Do not use the older `TemporalAgent` wrapper; it is deprecated and planned for removal in Pydantic AI v3. Give the agent and every toolset a stable explicit name/ID because those names become Activity identities and cannot casually change while histories are live.
 
@@ -859,6 +874,8 @@ class SessionSnapshot(BaseModel):
 ```
 
 API models and persisted Workflow models should evolve additively: new fields get defaults; incompatible schema changes require versioning/replay planning.
+`failure_notice` remains in the snapshot type only for replay and display of sessions created
+before the 14 October 2026 no-email decision; new no-result sessions leave `email_kind` unset.
 
 Command timestamps used for inactivity are recorded with deterministic Workflow time when an Update is accepted; the server does not trust a client-supplied timestamp for the deadline.
 
@@ -887,7 +904,7 @@ Proposed posture, subject to review:
 - no marketing language, cross-sell, newsletter signup, or tracking pixel in the itinerary email;
 - just-in-time notice beside the email field plus a full privacy page;
 - store email encrypted in Cloud SQL and refer to it by `contact_id` elsewhere;
-- redact email, free text, and fine-grained trip details from logs and Logfire by default;
+- redact email, free text, and fine-grained trip details from logs by default;
 - do not send contact details in SearchApi queries, model prompts, or outbound URLs;
 - use a Temporal Payload Codec backed by Cloud KMS if itinerary/preferences in Workflow payloads are in the threat model;
 - define and automate retention for contacts, saved itineraries, email-delivery records, and Workflow History; and
@@ -924,9 +941,10 @@ Do not invent the exact retention period here. Choose it with Temporal Cloud His
 
 ## Observability and evaluation
 
-### Logfire
-
-Use `LogfirePlugin()` so Temporal Workflow/Activity telemetry and Pydantic AI model/tool spans form one trace. Instrument FastAPI and provider HTTP clients, but configure scrubbing before sending production traffic. Trace IDs should correlate session, Workflow, provider calls, and email without using email as an attribute. Measure Query latency, errors, unchanged-response rate, worker replay/cache behavior, and time from turn commit to browser display; omit transcript/snapshot bodies from polling telemetry.
+Keep the existing sanitized application logs for model attempt timing and failures. Do not
+send request bodies, session IDs, email addresses, or model content to an external tracing
+service. Review operational diagnostics against concrete incidents before adding another
+observability integration.
 
 ### Deterministic checks and curated examples
 
@@ -951,7 +969,7 @@ an infeasible route pass. Keep meaningful Workflow replay/failure and provider c
 
 Developers review the curated outputs for usefulness, clarity, meaningful alternatives, budget
 fit, and constraint preservation. This is pre-release QA, not a dependency of live sessions.
-Keep ordinary Logfire traces for debugging and observed request cost. Defer automated LLM
+Use existing application logs for debugging and observed request cost. Defer automated LLM
 judges, judge calibration, and detailed tool-trajectory scoring until concrete quality problems
 justify them. No separate evaluator platform is required for the initial build.
 
@@ -1085,7 +1103,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Complete flight token selection, Google Flights handoff, dated/occupied hotel links, and rail date/party/currency validation. Unknown group fares remain unknown. Contract tests cover known spike discrepancies and empty/error responses.
 - Pydantic AI durable run inside the session Workflow.
 - Statically exported Next.js `/` and `/plan/` routes, typed React form/cards/chat, generated API client, curated progress, completed answers, atomic cards, and direct Temporal snapshot polling with revision-aware reconciliation and error recovery.
-- Bounded follow-up revision, direct mobile reload, manual/inactivity/limit email, no-result failure notice, Temporal time-skipping, and Resend idempotency tests.
+- Bounded follow-up revision, direct mobile reload, manual/inactivity/limit itinerary email, no-result no-email behavior, Temporal time-skipping, and Resend idempotency tests.
 
 **Exit:** the SearchApi adapters produce typed flight/hotel/train evidence and accepted external handoffs for the vertical slice, with missing prices explicitly represented. Terminate the Worker during a model Activity and restart the API/browser; polling recovers, the UI retains its last valid state, and the session commits one valid response/itinerary and sends one email.
 
@@ -1095,9 +1113,9 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Test direct-link longevity, price drift, tax/baggage treatment, missing train widgets, and SearchApi degradation. Verify critical transfer guidance in the catalog; do not rely on the unproven Maps Directions timing behavior.
 - Complete the small catalog/date enumeration, feasibility checks, and budget ranking for the enabled patterns.
 - Complete Q&A responses and curated progress for every applicable turn; typed itinerary revisions remain atomic.
-- Transactional itinerary/failure email templates, direct outbound links, privacy/brand/accessibility copy, and branded static assets.
+- Transactional itinerary email template, direct outbound links, privacy/brand/accessibility copy, and branded static assets.
 - Enforced mobile Web Vitals, accessibility, and bundle budgets on the production export.
-- Curated deterministic scenario set, developer-reviewed example outputs, and ordinary Logfire traces; no automated LLM judges.
+- Curated deterministic scenario set and developer-reviewed example outputs; no automated LLM judges.
 
 **Exit:** every fixture/tier meets mode-specific feasibility, honesty, freshness, latency, and coverage thresholds; incomplete price coverage is permitted only when the UI says so.
 
@@ -1109,7 +1127,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - Confirm SearchApi commercial display/cache/email/link permissions and adequate automated coverage for the public self-serve target. If readiness falls short, restrict unsupported features/routes before launch.
 - Dashboards, alerts, source kill switches, polling timeout/backoff behavior, and degraded-mode copy.
 
-**Exit:** production canaries prove the minimum Worker capacity and scale-out, each enabled source/fallback transition, kill switches, polling recovery, itinerary generation, frontend rollback, and exactly-one email.
+**Exit:** production canaries prove the minimum Worker capacity and scale-out, each enabled source/fallback transition, kill switches, polling recovery, itinerary generation, frontend rollback, and at-most-one itinerary email.
 
 ### Milestone 4 — post-launch expansion
 
@@ -1142,7 +1160,7 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 - The browser polls about every two seconds while work is pending, slows while awaiting input, pauses in hidden tabs, and stops at terminal states. It handles unchanged responses and temporary Query failures, ignores older revisions, and converges to canonical state without a separate live PostgreSQL projection.
 - No chain-of-thought, reasoning parts, tool arguments, raw provider payloads, or unrelated PII appear in public snapshots.
 - Manual send, meaningful inactivity, or session limits freeze and email the latest committed plan once, even if the user closes the page. Finalization makes no model/provider calls, changes no itinerary selections or price timestamps, and uses direct outbound links.
-- Initial planning has a bounded outcome: a valid/partial plan or one honest failure notice. A failed/timed-out follow-up cannot replace the last valid plan. The interaction limit does not terminate durable email retries.
+- Initial planning has a bounded outcome: a valid/partial plan or an on-page failure with no email. A failed/timed-out follow-up cannot replace the last valid plan. The interaction limit does not terminate durable email retries for valid plans.
 - The maximum permitted session stays within tested payload/History budgets without summarization or history rollover. Developer-reviewed examples and deterministic checks cover all enabled destinations and budget styles.
 - Worker termination and API restart do not lose the session.
 - A direct `/plan/?session=…` reload restores the Workflow-backed snapshot using a non-secret identifier plus the authorized cookie/link credential.
@@ -1163,10 +1181,10 @@ Cloud Run scale-in is not Activity-aware. All Activities are idempotent; long mo
 6. **Booking handoff:** link directly to Google Flights with explicit UK market/British-English/GBP parameters, dated/occupied Booking.com property pages, and train seller pages. Use contextual searches when a specific link is unsuitable for retention. No app redirect service, outbound token lifecycle, click audit, refresh-on-click, or checkout automation.
 7. **Price storage:** retain one ordinary normalized price-snapshot model with the itinerary in Temporal and PostgreSQL projections. Include amount, currency, source/time, scope/party, taxes, and baggage context. Freshness controls labels; user-requested revisions can refresh observations. Email never reprices or deletes a saved price. No separate quote cache, expiring handles, or field-level storage-policy machinery is required for SearchApi.
 8. **Infrastructure:** use Terraform from the start, including the Cloud Storage/Cloud CDN frontend path, shared HTTPS load balancer, Cloud Run, Cloud SQL, IAM, and Serverless Worker prerequisites. Default regional resources to GCP `europe-west3` and colocate Temporal Cloud in `gcp-europe-west3`. Release objects are published separately from Terraform state.
-9. **Email:** freeze and send the latest committed revision unchanged, preserving price timestamps and caveats. Initial failure produces one failure notice. Use a single session-level idempotency key and durable delivery record.
+9. **Email:** freeze and send the latest committed revision unchanged, preserving price timestamps and caveats. Initial failure sends no email. Use a single session-level idempotency key and durable delivery record for valid plans.
 10. **Route scope:** plan from London hubs using a minimal catalog tied to the four Palace fixtures. Defer nationwide origins, arbitrary gateway discovery, and coach/ferry search.
 11. **Conversation scope:** start with ten follow-ups, a 30-minute interaction window, three minutes for initial planning, and 90 seconds per follow-up, plus explicit call budgets. Defer summarization and Continue-As-New; verify bounded History/payload growth.
-12. **Evaluation:** deterministic checks, provider contracts, a small curated scenario set, developer quality review, and Logfire traces. Defer automated LLM judges and trajectory-scoring machinery.
+12. **Evaluation:** deterministic checks, provider contracts, a small curated scenario set, and developer quality review. Defer automated LLM judges and trajectory-scoring machinery.
 
 Public self-serve with automated research, revisions, and finalization is the sole MVP operating model. The remaining fidelity cases are integration/readiness work, not an open provider-selection spike. The detailed spike report retains the observed discrepancies and validation boundaries; the 6 September decision accepts them with estimated-price labeling and external-search handoffs.
 

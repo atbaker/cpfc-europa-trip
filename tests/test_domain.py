@@ -1,7 +1,9 @@
 import pytest
 from pydantic import ValidationError
 
+from cpfc_trip.catalog import load_catalog
 from cpfc_trip.domain import Brief, Party
+from cpfc_trip.origins import airports_for, routes_for_origin
 from cpfc_trip.planner.agent import Intent
 from cpfc_trip.planner.planning import enumerate_specs, feasible
 from cpfc_trip.planner.recorded import sample
@@ -17,7 +19,7 @@ def test_catalog_fails_closed(session_input):
         len(
             enumerate_specs(session_input.brief, session_input.fixtures, session_input.routes, True)
         )
-        == 1
+        == 2
     )
 
 
@@ -64,6 +66,72 @@ def test_duplicate_fixture_rejected():
         Brief(fixture_ids=("same", "same"))
 
 
+def test_trip_brief_keeps_legacy_multi_match_sessions_readable():
+    assert Brief(fixture_ids=("uel-2026-lyon-away",)).fixture_ids == ("uel-2026-lyon-away",)
+    assert len(Brief(fixture_ids=("uel-2026-lyon-away", "uel-2026-besiktas-away")).fixture_ids) == 2
+
+
+def test_all_four_away_matches_have_enabled_live_routes():
+    fixtures, routes = load_catalog()
+    assert {fixture.id for fixture in fixtures} == {
+        route.fixture_id for route in routes if route.enabled
+    }
+    assert {route.id for route in routes if route.enabled} == {
+        "london-lys",
+        "london-paris-lyon",
+        "london-ist",
+        "london-waw",
+        "london-szg",
+    }
+    assert all(fixture.venue_location for fixture in fixtures)
+
+
+def test_uk_departure_city_resolves_without_guessing(session_input):
+    assert airports_for(" manchester ") == ("MAN",)
+    assert airports_for("London") == ("LHR", "LGW", "STN", "LTN")
+    with pytest.raises(ValueError, match="supported UK departure city"):
+        airports_for("Paris")
+    routes = routes_for_origin(session_input.routes, "Manchester")
+    assert len(routes) == 2
+    assert routes[0].origin == "MAN" and routes[0].mode == "flight"
+    assert routes[0].id != session_input.routes[0].id
+    assert routes[1].origin == "Manchester" and routes[1].mode == "rail"
+    assert all(
+        route.mode == "flight" for route in routes_for_origin(session_input.routes, "Belfast")
+    )
+    assert any(route.mode == "rail" for route in routes_for_origin(session_input.routes, "London"))
+    edinburgh_rail = next(
+        route
+        for route in routes_for_origin(session_input.routes, "Edinburgh")
+        if route.mode == "rail"
+    )
+    assert edinburgh_rail.gateway_arrival_hours == (6, 24)
+    assert "hotel check-in" in edinburgh_rail.transfer_note
+
+
+def test_recorded_city_offers_a_rail_example(session_input):
+    brief = session_input.brief.model_copy(
+        update={"origin_city": "Manchester", "transport_mode": "rail"}
+    )
+    specs = enumerate_specs(
+        brief, session_input.fixtures, routes_for_origin(session_input.routes, "Manchester"), True
+    )
+    assert {spec.route.mode for spec in specs} == {"flight", "rail"}
+    rail = next(spec for spec in specs if spec.route.mode == "rail")
+    journey = sample(rail, "rail").journeys[0]
+    stay = sample(rail, "stay").stays[0]
+    assert journey.outbound[0].mode == "rail"
+    assert journey.outbound[0].origin == "Manchester Piccadilly"
+    assert feasible(
+        journey,
+        stay,
+        rail.fixture,
+        brief,
+        Intent(action="revise", answer="", transport_mode="rail"),
+        rail.route,
+    )
+
+
 def test_search_respects_custom_window_and_prioritizes_each_fixture(session_input):
     from datetime import timedelta
 
@@ -84,6 +152,6 @@ def test_search_respects_custom_window_and_prioritizes_each_fixture(session_inpu
     assert any(s.outbound_date == start.date() for s in specs)
 
 
-def test_model_rejects_outside_catalog_airport():
+def test_model_rejects_invalid_airport_code():
     with pytest.raises(ValidationError):
-        Intent(action="revise", answer="", preferred_airports=("MAN",))
+        Intent(action="revise", answer="", preferred_airports=("MAN<script>",))

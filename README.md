@@ -1,14 +1,114 @@
 # Eagles Away
 
-A London-based travel planner for Crystal Palace supporters, supported by Temporal.
-**A local, live London → Lyon vertical slice is implemented. The public MVP is not complete or deployed.**
+A UK departure-city travel planner for Crystal Palace supporters, supported by Temporal.
+**Live planning covers four Europa League away matches. Lyon has flight and reviewed UK rail options; Istanbul and Salzburg have flight searches; Białystok combines flights to Warsaw with dated direct trains. The public MVP is not complete.**
 Start with the [engineering handoff](planning/2026-09-30-engineering-handoff.md) for completed work,
 remaining milestones and ownership transfer. The [MVP plan](planning/mvp-plan.md) defines the approved scope.
 
 The app uses Gemini Flash 3.8, SearchAPI flight/hotel/train data, Temporal and PostgreSQL.
+During live research the page can show a checked return journey before a complete trip is ready; this preview is not saved or emailed. Initial briefs without free-text instructions search directly from the typed form values, so a Gemini outage does not block that first search. The finished plan links to fresh Google Maps directions for local transfers without claiming a transfer time or fare.
 The Next.js frontend polls authenticated Temporal snapshots through FastAPI. Users get a
 frozen itinerary with direct travel links; the app does not book travel or sell match tickets.
 The domain is **eaglesaway.com**; the verified transactional sender uses **notifications.eaglesaway.com**.
+
+## Visual identity
+
+The interface uses the Crystal Palace brand book's red (`#ee2e24`), blue (`#0055a5`),
+black, white, grey and yellow focus colour. The header centers “Built for” above the
+full-colour club crest, with the Temporal credit at the right; the SVG comes from the
+[official club shop](https://shop.cpfc.co.uk/).
+The current site fonts remain in place until the club supplies licensed Palace font files.
+
+## Private cloud preview
+
+The DigitalOcean app runs at
+[eagles-away-preview-ifemt.ondigitalocean.app](https://eagles-away-preview-ifemt.ondigitalocean.app/)
+on DigitalOcean App Platform in Frankfurt: one web service, a continuously running Temporal
+worker component, a migration job, an hourly retention job, and PostgreSQL. The worker component
+is configured for two replicas on the scalable shared-CPU plan during the October launch update.
+The app's primary domain is
+`eaglesaway.com`. HTTP Basic remains available for a protected preview; public access is enabled
+only when `PREVIEW_ACCESS_REQUIRED=false` is set in the deployed app spec. The earlier GCP review and deployment evidence
+are in the [deployment readiness record](planning/2026-10-06-deployment-readiness.md).
+
+`Dockerfile.preview` builds the static Next.js export and FastAPI into one image so browser
+requests and session cookies use the same origin. The image defaults to `APP_ENV=preview`,
+serves the export from `/app/frontend/out`, and runs `cpfc-api`; the same image can run
+`cpfc-worker` as the App Platform worker command. The public beta uses
+`EMAIL_MODE=resend` for live itinerary emails.
+By default, `APP_ENV=preview` requires `PREVIEW_USERNAME` and `PREVIEW_PASSWORD`; `/healthz` remains
+available to the platform health check. The database adapter accepts DigitalOcean's PostgreSQL
+connection URL and uses `asyncpg` with its requested TLS mode.
+For an explicitly public beta on this preview infrastructure, set
+`PREVIEW_ACCESS_REQUIRED=false` and remove the unused preview credentials from the app spec.
+This only removes HTTP Basic; the session cookie and POST origin checks remain active.
+Build and smoke-test locally without placing `.env` files in the image:
+
+```bash
+docker build -f Dockerfile.preview -t eagles-away:preview .
+docker run --rm --entrypoint python -e PREVIEW_USERNAME=reviewer \
+  -e PREVIEW_PASSWORD=local-smoke-password eagles-away:preview -c \
+  'from cpfc_trip.api import create_app; print(create_app().title)'
+```
+
+The preview uses a migrated PostgreSQL database, encrypted runtime variables for contact and
+session keys, SearchApi, Temporal Cloud, and Gemini, plus a continuously running worker.
+`GOOGLE_AUTH_MODE=api_key` enables free-text briefs without local `gcloud`
+credentials. `FRONTEND_ORIGIN` resolves to the primary hosted origin;
+`ADDITIONAL_FRONTEND_ORIGINS` lists any other trusted browser origins, separated by commas.
+The DigitalOcean preview includes its generated `ondigitalocean.app` URL so POST requests work
+there while the custom domain is being set up. The Resend sending key is a runtime-only App Platform secret. Signed delivery-status
+webhooks are not configured, so the app records provider acceptance but cannot confirm inbox
+delivery or bounces.
+
+### Worker capacity and releases
+
+The launch worker target is two `apps-s-1vcpu-1gb` replicas at eight concurrent Activities
+each: 16 slots in total, matching the former single worker's limit. This costs about $24/month
+for worker compute, versus $10/month for the former fixed single worker; web, database and
+provider charges are separate. Search Activities heartbeat every five seconds and allow one
+Temporal retry after a lost attempt. Each attempt can use at most eight SearchApi requests;
+the Workflow reserves 16 per search and never refunds an ambiguous first attempt. The
+180-second initial and 90-second follow-up limits still apply, so a loss near a deadline
+may end that turn before recovery finishes. SearchApi account limits and provider 429s, not
+worker CPU alone, must be checked before adding slots.
+
+| Approach | Worker compute/month | Launch tradeoff |
+| --- | ---: | --- |
+| One fixed worker | $10 | Lowest cost; a worker restart temporarily removes all pollers |
+| Two fixed scalable shared workers | $24 | Chosen for failover and unchanged total Activity capacity |
+| Dedicated CPU autoscaling, one to two workers | $34–$68 | CPU is an unreliable signal for provider waits |
+| Queue-driven scaling, one to three shared workers | $12–$36 plus controller | Better signal, but needs custom scaling and alert infrastructure |
+
+The deployed worker uses Temporal Worker Deployment `cpfc-trip` with a full commit SHA build ID
+and pinned Workflows. Build each new worker version from an immutable release branch, start its
+replicas, verify pollers, then set it Current in Temporal. Keep at least one old-build replica
+until `temporal worker deployment describe-version` reports it drained. The first cutover from
+unversioned workers may replace them directly only after verifying zero running Eagles Away
+Workflows. DigitalOcean must allow 180 seconds after SIGTERM; the SDK drains for up to 150
+seconds. Do not reuse a build ID for different code. The live app spec is ignored because it
+contains secrets; never paste it into logs or commit it.
+
+With a Temporal CLI profile for the Eagles Away namespace, the promotion checks are:
+
+```bash
+temporal worker deployment describe --name cpfc-trip
+temporal task-queue describe --task-queue cpfc-trip-v3 --task-queue-type activity --select-build-id <build-id>
+temporal task-queue describe --task-queue cpfc-trip-v3 --task-queue-type workflow --select-build-id <build-id>
+temporal worker deployment set-current-version --deployment-name cpfc-trip --build-id <build-id>
+temporal worker deployment describe-version --deployment-name cpfc-trip --build-id <old-build-id>
+```
+
+Inspect both workflow and activity Task Queues, current version, poller counts, oldest backlog
+age and DigitalOcean restart/memory metrics after deployment and after traffic spikes. Page if
+either task type has zero live pollers or backlog age exceeds five seconds for ten minutes.
+Consider a third worker only if p95 Schedule-to-Start exceeds two seconds for ten minutes,
+available slots are exhausted, and SearchApi/Gemini are not throttling. A fixed second worker
+provides immediate failover. CPU autoscaling on DigitalOcean requires dedicated CPU and is a
+poor signal for network-bound searches; queue-driven scaling would need a separate controller
+and should wait for measured demand. See [DigitalOcean pricing](https://docs.digitalocean.com/products/app-platform/details/pricing/),
+[scaling](https://docs.digitalocean.com/products/app-platform/how-to/scale-app/) and
+[Temporal worker guidance](https://docs.temporal.io/best-practices/worker).
 
 ## Start locally
 
@@ -80,12 +180,36 @@ scripts/dev/preview.sh worker
 These commands override planning/email modes only for their own processes. Do not run the
 normal API/worker alongside them on the same ports/task queue.
 
+Live provider results are shared by workers through a PostgreSQL cache for 24 hours.
+Transport entries are keyed by the reviewed route, dates, travel mode and party; hotel
+entries use city, dates, party and room/budget preferences. The app shows each quote's
+original checked time. Empty or failed searches are retried, and cache errors fall back to
+the provider. Run `uv run --locked cpfc-db upgrade` before restarting an existing worker
+after pulling this change.
+
 ## Enable live planning
 
-Only the reviewed Lyon routes are enabled: London–LYS flights and London–Paris–Lyon rail,
-adults sharing one room. Children, multiple rooms and the other three fixture destinations
-remain unsupported in live mode. Venue and match-specific transfers still have outstanding
-checks. Quotes are retrieved planning estimates with missing costs explicitly disclosed.
+All four listed away matches have reviewed live search patterns. Lyon offers direct flights
+from supported UK airport cities and rail through London and Paris from London, Birmingham,
+Bristol, Cardiff, Edinburgh, Leeds, Liverpool, Manchester and Newcastle. Istanbul and
+Salzburg have flight searches; Białystok joins flights to Warsaw with dated direct trains.
+All flight searches try nonstop first, then suitable one-stop flights if needed. Live pricing
+currently supports adults sharing one room. Children and multiple rooms
+remain unsupported. Venue and match-specific transfers still need checks; quotes are planning
+estimates with missing costs explicitly disclosed.
+The form defaults to London. Choose another city from the UK dropdown to search its supported
+airport and, where listed, a dated rail connection. A direct service and complete live itinerary
+are not guaranteed. Non-London rail includes a separate UK train and an unpriced London station
+transfer; the planner requires at least three hours before Eurostar. Its observed leg fares are
+single-person estimates, not a verified group total.
+The form, match card and saved email link CPFC members to the club's away-ticket page. Match
+tickets remain separate from the travel plan and subject to the club's availability and eligibility.
+The form uses structured choices and no longer accepts free-text trip instructions. Older
+sessions with an airport preference retain their fallback behavior: the planner rechecks
+retrieved results without that preference and labels any alternative airport in the plan.
+If no complete trip is verified, the page explains whether the checked results
+lacked a return journey, a matching stay or a journey that passed timing checks. A failed
+request does not send an email.
 
 Put secrets in the ignored root `.env`, never in frontend `NEXT_PUBLIC_*` variables.
 Configure your own team account/project rather than depending on the previous engineer's login:
@@ -132,12 +256,23 @@ allowance minus usage too. Account verification does not prove every search engi
 Keep `EMAIL_MODE=preview` for routine development. `EMAIL_MODE=resend` performs actual delivery
 and needs `RESEND_API_KEY` and a verified `RESEND_FROM_EMAIL`. A sending-only key must be scoped
 to the actual From domain. `RESEND_WEBHOOK_SECRET` is needed for signed delivery-status webhooks;
-its live setup is still TODO. Email styling remains deferred for frontend review.
+its live setup is still TODO. The HTML email uses the same colours and plan-card hierarchy as
+the website, with a plain-text alternative. It does not depend on the website stylesheet.
 
 The frozen itinerary is persisted and rendered without another research pass. The outbox
 freezes the sender/content/idempotency key before sending; ambiguous sends are never retried
 under a new identity after the safe retry window. Existing real delivery was validated in
 September; a fresh engineer should use previews unless an actual send has been authorized.
+If the search cannot commit an itinerary, the session ends with an on-page explanation and no
+email or delivery record. A Temporal patch keeps older failure-notice histories replayable.
+The user must select “Send me my itinerary” to send a complete plan. The planning session ends
+after 30 minutes without automatically emailing; a saved plan remains visible on its page.
+After the email provider accepts a send, the app erases its local encrypted recipient address
+and address hash in the same transaction as the provider receipt. An ambiguous send retains the
+address until it can be retried or reconciled; the provider may separately retain delivery data.
+The `cpfc-prune` command deletes application database sessions and their email delivery records
+older than 30 days, plus email webhook records older than 30 days. DigitalOcean schedules it hourly
+at minute zero UTC. This does not control retention in Resend, Temporal Cloud, or database backups.
 
 ## Validate changes
 
@@ -157,7 +292,11 @@ own servers; they do not need the main local server or API/worker.
 
 The frontend exports `/`, `/plan/` and `/privacy/`. Production requires
 `NEXT_PUBLIC_API_ORIGIN=` at build time for same-origin API calls; local `.env.local` points
-to port 8000. No production Node server is part of the plan.
+to port 8000. `NEXT_PUBLIC_GA_MEASUREMENT_ID` optionally enables consent-gated Google
+Analytics; the measurement ID is public and must be supplied as a Docker build argument for
+the DigitalOcean preview. Google Analytics enhanced measurement should remain disabled so
+automatic page views cannot include the `/plan/` session query. No production Node server is
+part of the plan.
 
 For a deliberate paid integration run:
 

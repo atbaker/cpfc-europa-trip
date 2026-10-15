@@ -14,6 +14,7 @@ from cpfc_trip.domain import (
     SearchSpec,
     Stay,
 )
+from cpfc_trip.origins import UK_RAIL
 
 
 def sample(spec: SearchSpec, kind: str) -> SearchBatch:
@@ -59,27 +60,36 @@ def sample(spec: SearchSpec, kind: str) -> SearchBatch:
             )
         )
     london, destination = ZoneInfo("Europe/London"), ZoneInfo(spec.route.destination_timezone)
+    rail = kind == "rail"
+    airport = (
+        UK_RAIL[spec.route.origin][1]
+        if rail and spec.route.origin in UK_RAIL
+        else "St Pancras International"
+        if rail
+        else spec.route.origin.split(",")[0]
+    )
+    gateway = "Lyon Part Dieu" if rail else spec.route.destination
     dep = datetime.combine(spec.outbound_date, time(9), london)
     back = datetime.combine(spec.return_date, time(14), destination)
     out = Leg(
         id=base + "out",
-        mode="flight",
-        origin="LGW",
-        destination=spec.route.destination,
+        mode="rail" if rail else "flight",
+        origin=airport,
+        destination=gateway,
         departs_at=dep,
-        arrives_at=(dep + timedelta(hours=2)).astimezone(destination),
-        operator="Sample airline",
+        arrives_at=(dep + timedelta(hours=8 if rail else 2)).astimezone(destination),
+        operator="Sample rail journey" if rail else "Sample airline",
         offer=ref,
         quote=q,
     )
     inbound = Leg(
         id=base + "in",
-        mode="flight",
-        origin=spec.route.destination,
-        destination="LGW",
+        mode="rail" if rail else "flight",
+        origin=gateway,
+        destination=airport,
         departs_at=back,
-        arrives_at=(back + timedelta(hours=2)).astimezone(london),
-        operator="Sample airline",
+        arrives_at=(back + timedelta(hours=8 if rail else 2)).astimezone(london),
+        operator="Sample rail journey" if rail else "Sample airline",
         offer=ref,
         quote=q,
     )

@@ -29,13 +29,32 @@ criteria remain the launch checklist; this report does not remove them.
 | Feasibility and ranking | `planner/planning.py`, `prices.py`, `links.py`; date enumeration, up to three date pairs, match buffers, transfers, budget/value/comfort ranking and cached candidate reuse. | Sampled comparison, not exhaustive cheapest-fare optimization. Dorm/shared-bathroom stays are valid when permitted; private-room/bathroom requirements are hard constraints. |
 | Prices and handoffs | Money/Quote records retain retrieval time, currency, tax/party scope and evidence; round-trip prices counted once; normalized observations live with itineraries. | No separate price store/cache required. Unverified rail passenger scope and local transfers are excluded from the subtotal; a rail subtotal can be hotel-only. Google Flights search/itinerary links satisfy the approved handoff. |
 | Durable session | `temporal/workflow.py`, `activities.py`, `worker.py`; type `TravelPlanningSessionWorkflowV3`, queue `cpfc-trip-v3`; idempotent Updates and direct Query snapshots. | Local restart/replay proven. Production routing/version lifecycle and minimum one worker are planned, not deployed. Queries require an available worker; `/readyz` alone does not check that. |
-| Work budgets | Initial 180s/follow-up 90s, 30-minute interaction lifetime, default 10-minute inactivity, ten follow-ups; reserved SearchAPI/model budgets and bounded Activity attempts. | Per-session safeguards do not replace shared admission controls or real load/latency testing. |
+| Work budgets | Initial 180s/follow-up 90s, 30-minute interaction lifetime, default 10-minute inactivity, ten follow-ups; reserved SearchAPI/model budgets and bounded Activity attempts. On 5 October, live travel acquisition changed to waves with one retry of a transient failed HTTP request inside each reserved adapter budget. | Per-session safeguards do not replace shared admission controls or real load/latency testing. See [search reliability tasks](2026-10-05-search-reliability-tasks.md) for the new limits and local tests. |
 | UI/polling | `frontend/components/`, `frontend/lib/api.ts`; form, cards, alternatives, chat, revision-aware reconciliation; polling slows while idle/pauses hidden/stops terminal. Static `/`, `/plan/`, `/privacy/` export. | Four small frontend unit tests plus manual browser evidence; no automated browser/mobile or deployment/rollback suite. Design/email review is outstanding. |
 | Database/session security | `persistence/`, `migrations/`; PostgreSQL sessions, encrypted contact, access-token hash, saved final itinerary, delivery outbox and webhook events; HttpOnly session cookies and origin checks. | No separate Postgres live-progress projection. Current database engine uses a normal connection URL; Cloud SQL IAM connector/pooling configuration still needs implementation. |
 | Email/finalization | `emailing.py`, `resend.py`, database-backed delivery Activity; frozen request/hash/sender/session tag and stable provider idempotency; bounded ambiguous-send handling; manual/inactivity/limit/failure paths. | `notifications.eaglesaway.com` delivered one authorized test in September. Today's validation is preview-only. Live signed webhook delivery/status reconciliation, monitoring and polished templates remain TODO. |
 | Quality checks | `scripts/check.sh`: Python types/lint/51 tests, provider excerpts, Temporal tests, real Postgres concurrency, generated API drift, TS/lint/four UI tests and export. | Local gate only; no CI configuration or curated 20–30-scenario end-to-end set. Passing contract excerpts does not establish full live travel coverage. |
 
 ## Validation performed for this handoff
+
+### 5 October local recovery and validation
+
+- A user submission initially failed to fetch because local PostgreSQL was stopped. The
+  existing container was started, migrations applied, and `/readyz` returned HTTP 200.
+- The next session reached Temporal but failed before travel acquisition: both Gemini
+  Activity attempts could not refresh the configured `eagles-away-work` gcloud login.
+  Reauthentication restored credential refresh. The completed failure session cannot
+  resume; a new brief is required.
+- The Gemini-only synthetic workflow passed initial planning, Q&A, revision, worker
+  restart and replay. The live Lyon validation then produced a priced first draft in
+  40.27 seconds, preserved it through Q&A, and completed a train-only revision in
+  46.33 seconds with preview email and replay. These are point-in-time results, not
+  guaranteed search latency or prices. No real email was sent.
+- A model/credential outage now produces a planning-service message instead of the
+  misleading search-limit message. The local Python suite passed 53 tests, with two
+  PostgreSQL tests skipped because their separate test database was not configured.
+
+### 30 September–1 October handoff validation
 
 - Updated runtime pins within their existing families: Python **3.13.3 → 3.13.15** and
   Node.js **22.13.1 → 22.23.3** (npm 10.9.9). Installed alongside existing runtimes without
@@ -145,6 +164,17 @@ The approved simplifications still apply: polling directly through Temporal, ord
 price snapshots, no human concierge, no browser tooling/fallback, direct outbound links, short
 bounded sessions and no extra research at finalization. These are decisions, not missing features.
 Broader clubs/combined trips/origins and conversation compaction remain post-MVP scope.
+
+## 2 October 2026 local continuation
+
+- The Eagles Away UI now uses a white editorial layout with restrained red/blue sash accents inspired by the 2026/27 shirt. The existing brief fields and submission payload are retained in three in-page steps (matches/dates, travel preferences, contact/details), with state kept while moving backward. The desktop home includes an explicitly dated Lyon example; mobile hides that example to keep the form first. The itinerary and waiting view share the new tokens, and the email action is in normal document flow so it does not cover mobile trip cards. Browser review covered 390px and 1280px layouts; the full accessible browser and performance audit is still outstanding.
+- The frontend waiting view now uses rotating phase-specific copy and a compact London-to-destination route illustration instead of loading placeholders or a step list. The workflow's curated progress message remains the accessible live status; the illustration is decorative. Reduced-motion styling is retained.
+- A first new live Lyon session failed before searching: both Gemini `gemini-3.8-flash` attempts returned HTTP 504 after about 38 seconds with the 40-second client deadline. The client deadline was raised to 120 seconds and the model Activity deadlines to 130/270 seconds. The later successful request completed in 8.4 seconds, so whether the longer deadline was necessary remains unverified.
+- A second local Lyon session reached a draft using live SearchAPI results and preview-only email. At 16:20 UTC the selected round-trip Luton–Lyon flight was a rounded £268 planning quote, and the selected stay was £60 plus £3 indicated additional taxes. The UI showed a £331 known subtotal and 40% price coverage. Prices, links, baggage, tax scope, transfers and venue details still require rechecking before booking. This was a local observation, not a production or broad-route validation.
+
+## 5 October 2026 UI spacing continuation
+
+- Shared CSS spacing values now govern page gutters, outer panels, inner cards, and action gaps. The waiting view shows its rotating message without a second visible progress bullet; the phase message remains a screen-reader live region. The conversation form has a defined gap between the textarea and Send message button, with a full-width action on narrow screens. Desktop (1280px) and mobile (390px) layout checks found no horizontal overflow; full accessibility review remains outstanding.
 
 ## Ownership and operational handover
 
