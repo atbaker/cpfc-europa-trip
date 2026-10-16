@@ -5,6 +5,7 @@
 - Replaced the club-shop crest SVG in the website header with the team's primary web badge PNG. The badge kept the existing centered “Built for” layout; desktop and mobile local renders showed it without clipping. The local preview had no API running, so this was a visual check rather than a trip-flow check.
 - The owner confirmed the club supplied the font files directly, then chose to keep them out of this public repository. No Palace font files were copied, committed or served; the existing site fonts remain in use.
 - Three frontend form tests had become date-sensitive after the Lyon fixture. Fixing their clock at 5 October 2026 restored their intended pre-match scenarios. The frontend build, lint and all 28 tests passed. No paid provider request was made during local verification.
+- Commit `a55960d` was pushed to `main`. DigitalOcean deployment `4711ebff-a743-474e-9c42-425cf31512a7` reached `ACTIVE` with the web source on `main` and the unchanged worker build `47c3595d429ff54934441f6e5a440a5c07cd67dc` pinned to `codex/worker-release-47c3595`. Public `/`, `/healthz`, and `/cpfc-primary-badge.png` returned HTTP 200; live HTML references the new badge, and a mobile header render showed it centered without clipping. No live trip or email was submitted.
 
 ## 8 October 2026 — responsive visual audit
 

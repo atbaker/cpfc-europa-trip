@@ -9,7 +9,11 @@ These notes supersede the private-preview and GCP deployment steps below. The pu
 `373808be-b5ec-4d20-b7fc-d8dbe906aff9` runs the web service, migration and retention jobs,
 and two Temporal worker replicas, backed by PostgreSQL. Source is
 [`temporal-community/Eagles-Away`](https://github.com/temporal-community/Eagles-Away) on `main`.
-DigitalOcean uses a Git clone source: pushing a commit does **not** start a deployment.
+DigitalOcean uses a Git clone source: pushing a commit does **not** start a deployment. As of
+16 October, the web and jobs read `main`, while the unchanged worker build
+`47c3595d429ff54934441f6e5a440a5c07cd67dc` reads immutable branch
+`codex/worker-release-47c3595` so frontend-only source updates cannot rebuild the worker from
+newer code under its old build ID.
 
 The hosted Temporal queue is `eagles-away-do-preview-v1` (the fresh local checkout defaults to
 `cpfc-trip-v3`). The Worker Deployment is `cpfc-trip`; pinned workers use the full source commit
