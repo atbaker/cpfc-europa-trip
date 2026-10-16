@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PlannerForm } from "./planner-form";
 import { request } from "../lib/api";
@@ -11,7 +11,8 @@ vi.mock("../lib/api", async importOriginal => ({
 }));
 
 describe("trip brief steps", () => {
-  afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-05T12:00:00Z")); });
+  afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
   it("shows all city and match choices before the catalog request completes", async () => {
     vi.mocked(request).mockImplementationOnce(() => new Promise<never>(() => {}));

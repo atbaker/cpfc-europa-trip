@@ -1,5 +1,11 @@
 # Development notes
 
+## 16 October 2026 — supplied Palace assets
+
+- Replaced the club-shop crest SVG in the website header with the team's primary web badge PNG. The badge kept the existing centered “Built for” layout; desktop and mobile local renders showed it without clipping. The local preview had no API running, so this was a visual check rather than a trip-flow check.
+- The owner confirmed the club supplied the font files directly, then chose to keep them out of this public repository. No Palace font files were copied, committed or served; the existing site fonts remain in use.
+- Three frontend form tests had become date-sensitive after the Lyon fixture. Fixing their clock at 5 October 2026 restored their intended pre-match scenarios. The frontend build, lint and all 28 tests passed. No paid provider request was made during local verification.
+
 ## 8 October 2026 — responsive visual audit
 
 - Rendered the home form, privacy page, and connecting, waiting, partial, ready, complete, failed, and emailed plan states with representative local snapshots at 1280 × 800 and 390 × 844, plus narrow 320 × 700 checks. The completed itinerary was inspected through its footer. The state record is in `planning/2026-10-08-ui-audit.md`. These fixtures do not verify live prices or providers.
